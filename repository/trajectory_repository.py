@@ -40,8 +40,9 @@ class TrajectoryRepository:
             correct=data.get("correct", None),
             #  NOTE: not sure if we are even saving prompt_cache
             # prompt_cache_path=data.get("prompt_cache_path", None)
-            # NOTE: confidence loading slightly hacky
-            confidences=data.get("confidences", None) 
+            # NOTE: confidence + confidence_timing loading slightly hacky
+            confidences=data.get("confidences", None),
+            confidence_timings=data.get("confidence_timings", None)
         )
 
 
@@ -67,7 +68,8 @@ class TrajectoryRepository:
                 "ground_truth": trajectory_record.ground_truth,
                 "correct": trajectory_record.correct,
                 # "prompt_cache_path": trajectory_record.prompt_cache_path,
-                "confidences": trajectory_record.confidences
+                "confidences": trajectory_record.confidences,
+                "confidence_timings": trajectory_record.confidence_timings
             }, f, indent=2)
         
 

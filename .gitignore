@@ -1,2 +1,10 @@
-
+# Directories
 __pycache__/
+
+# File groups
+temp_*
+
+# Specific files
+monitor.sh 
+
+

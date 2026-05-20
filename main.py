@@ -46,13 +46,19 @@ def parse():
         help="Send tqdm progress to Discord via TQDM_DISCORD_TOKEN and TQDM_DISCORD_CHANNEL_ID env vars."
     )
     args.add_argument(
+        "--from_pickle",
+        type=str,
+        default=None,
+        help="Path to a pickle file containing raw dataset entries (NOT pre-generated). --dataset is still required for prompt/eval routing."
+    )
+    args.add_argument(
         "--from_pregenerated",
         type=str,
         default=None,
         help="Path to a pickle file containing pre-generated entries. --dataset is still required for prompt/eval routing."
     )
     args.add_argument(
-        "--max_new_tokens",
+        "--max_tokens",
         type=int,
         required=True,
         help="Maximum number of new tokens to generate for each prompt."
@@ -109,7 +115,7 @@ def parse():
         help="Whether to use thinking.",
     )
     args.add_argument(
-        "--type",
+        "--prompt_type",
         type=int,
         default=1,
         choices=[1, 2],
@@ -120,6 +126,8 @@ def parse():
         ),
     )
 
+    return args
+
 
 
 
@@ -129,7 +137,11 @@ def parse():
 def main():
     args = parse().parse_args()
     confidence_config, generation_config, sampling_config = ConfidenceConfig.from_args(args), GenerationConfig.from_args(args), SamplingConfig.from_args(args)
-    runner = Runner(confidence_config, generation_config, sampling_config)
+    runner = Runner(
+        generation_config=generation_config, 
+        confidence_config=confidence_config,
+        sampling_config=sampling_config
+    )
     runner.run()
     
 

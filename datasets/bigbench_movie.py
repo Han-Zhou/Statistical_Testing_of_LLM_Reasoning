@@ -83,7 +83,7 @@ class BigBenchMovieDataset(Dataset):
         user = USER_PROMPT_TEMPLATE.format(question=datapoint.question)
         assistant = ASSISTANT_PROMPT_START
 
-        if prompt_request.type == 1:
+        if prompt_request.prompt_type == 1:
             # Type 1: assistant prefill with thinking tokens and 'Step 1:'
             return [
                 {"role": "system", "content": system},

@@ -71,8 +71,8 @@ class BigBenchMovieDataset(Dataset):
         for i, row in enumerate(raw):
             entries.append(Datapoint(
                 id=f"bigbench_movie_{i}",
-                question=row["input"],
-                ground_truth=row["target"],
+                question=row["question"],
+                ground_truth=row["ground_truth"],
             ))
         logger.info(f"[bigbench_movie] {len(entries)} entries loaded from {pickle_path}")
         return entries

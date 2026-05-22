@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 
 from models.adapters.base import ModelAdapter
-from domain.data import Datapoint, ParsedOutputGeneration
+from domain.data import Datapoint, ParsedOutputGeneration, KVCache
 from config import GenerationConfig, SamplingConfig
 
 from pipeline.sampling.context import SampleContext
@@ -20,7 +20,7 @@ class SamplingMethod(ABC):
 
     
     @abstractmethod
-    def generate(self, datapoint: Datapoint) -> ParsedOutputGeneration | list[ParsedOutputGeneration]:
+    def generate(self) -> ParsedOutputGeneration | list[ParsedOutputGeneration]:
         ...
 
 

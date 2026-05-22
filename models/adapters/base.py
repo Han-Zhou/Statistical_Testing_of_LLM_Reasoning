@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, Sequence, Optional, Tuple
 
 from models.core_models import LLM, API_LLM
-from domain.data import LLMOutput, ParsedOutputGeneration, KVCache
+from domain.data import LLMOutput, ParsedOutputGeneration, CachedPrefix
 
 
 Mode = Literal["generation", "confidence"]
@@ -23,6 +23,11 @@ class ModelAdapter(ABC):
         self.model: LLM | API_LLM
 
     @abstractmethod
+    def align_cache(self, cache: Optional[CachedPrefix], prompt_text: str) -> Optional[CachedPrefix]:
+        ...
+
+
+    @abstractmethod
     def render_prompt(self, messages: list[dict[str, str]]) -> str:
         ...
     
@@ -30,19 +35,17 @@ class ModelAdapter(ABC):
     def process_generation_output(self, llm_outputs: LLMOutput) -> ParsedOutputGeneration:
         ...
     
-    # @abstractmethod
-    # def parse_output_answer_suffix(self, llm_outputs):
-    #     ...
     
     def generate(
             self, 
             messages: list[dict[str, str]],
             max_tokens: int, 
-            cache: Optional[tuple] = None, 
+            cache: Optional[CachedPrefix] = None, 
             # stop_strings: list[str] = None, 
             temperature: float = 0.0
         ) -> ParsedOutputGeneration:
         prompt_text = self.render_prompt(messages)
+        cache = self.align_cache(cache, prompt_text)
         output = self.model.generate(
             prompt=prompt_text,
             max_tokens=max_tokens,
@@ -50,7 +53,7 @@ class ModelAdapter(ABC):
             # stop_strings=stop_strings,
             temperature=temperature
         )
-        return self.parse_generation_output(output)
+        return self.process_generation_output(output)
 
 
 

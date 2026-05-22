@@ -1,0 +1,24 @@
+{
+  "id": "bigbench_movie_1",
+  "question": "Find a movie similar to The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption:\nOptions:\n(A) Street Fighter II The Animated Movie\n(B) The Sheltering Sky\n(C) The Boy Who Could Fly\n(D) Terminator 2 Judgment Day",
+  "prompt": "<|begin_of_text|><|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are an expert reasoning assistant. For every problem you receive, think carefully and reason step-by-step. Label each reasoning step as 'Step 1:', 'Step 2:', etc. After all steps, write your final answer on a new line in \\boxed{your answer} format. You must double-escape all LaTeX backslashes. For example, output \\boxed instead of \boxed.Keep your reasoning concise, and be brief in each step.When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFind a movie similar to The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption:\nOptions:\n(A) Street Fighter II The Animated Movie\n(B) The Sheltering Sky\n(C) The Boy Who Could Fly\n(D) Terminator 2 Judgment Day\n\nThink carefully about the movies listed and the options provided. Reason step-by-step before choosing the best answer.\n\nLet's think step-by-step.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+  "generated_text": "\n\nStep 1: Analyzing the common theme among The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption. These movies are known for their complex storytelling, unexpected twists, and a mix of genres, often blending drama, mystery, and action.\n\nStep 2: Considering each option, we need to find a movie that matches these criteria.\n\nStep 3: Looking at option (A) Street Fighter II The Animated Movie, it is primarily an action-animated film based on a popular video game. It doesn't fit the criteria of complex storytelling or unexpected twists, so it's unlikely the correct answer.\n\nStep 4: Examining option (B) The Sheltering Sky, it is an adventure drama film that explores themes of isolation and human relationships, but it doesn't quite match the level of complex storytelling and genre blending seen in the original movies.\n\nStep 5: Considering option (C) The Boy Who Could Fly, it is a fantasy drama film with a complex storyline involving a boy with a special ability, and it has a similar blend of genres found in the original movies. This option shows promise.\n\nStep 6: Looking at option (D) Terminator 2 Judgment Day, it is a science fiction action film with a strong plot, but it is more focused on action and less on the complex character-driven storytelling found in the original movies.\n\nStep 7: Based on the analysis, the option that best matches the common theme and style of The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption is The Boy Who Could Fly.\n\n\\boxed{C}<|eot_id|>",
+  "cot_steps": [
+    "Step 1: Analyzing the common theme among The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption. These movies are known for their complex storytelling, unexpected twists, and a mix of genres, often blending drama, mystery, and action.",
+    "Step 2: Considering each option, we need to find a movie that matches these criteria.",
+    "Step 3: Looking at option (A) Street Fighter II The Animated Movie, it is primarily an action-animated film based on a popular video game. It doesn't fit the criteria of complex storytelling or unexpected twists, so it's unlikely the correct answer.",
+    "Step 4: Examining option (B) The Sheltering Sky, it is an adventure drama film that explores themes of isolation and human relationships, but it doesn't quite match the level of complex storytelling and genre blending seen in the original movies.",
+    "Step 5: Considering option (C) The Boy Who Could Fly, it is a fantasy drama film with a complex storyline involving a boy with a special ability, and it has a similar blend of genres found in the original movies. This option shows promise.",
+    "Step 6: Looking at option (D) Terminator 2 Judgment Day, it is a science fiction action film with a strong plot, but it is more focused on action and less on the complex character-driven storytelling found in the original movies.",
+    "Step 7: Based on the analysis, the option that best matches the common theme and style of The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption is The Boy Who Could Fly."
+  ],
+  "final_answer": "C",
+  "ground_truth": "(D)",
+  "evaluation_result": {
+    "correct": false,
+    "score": null,
+    "llm_judge_applicable": false
+  },
+  "confidences": null,
+  "confidence_timings": null
+}

@@ -51,7 +51,7 @@ class LLM():
         # prompt SHOULD ALREADY HAVE chat template applied
         logger.info(f"Generating text with model {self.model_name}")
 
-        inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
 
         # if stop_strings:
         #     stop_criteria = StoppingCriteriaList([
@@ -86,9 +86,10 @@ class LLM():
                 )
 
         output_text = self.tokenizer.decode(outputs.sequences[0], skip_special_tokens=False)
+        # offsets_mapping requires a fast tokenizer
         full_offsets = self.tokenizer(
             output_text,
-            return_offset_mapping=True,
+            return_offsets_mapping=True,
             add_special_tokens=False,
         )["offset_mapping"]
 

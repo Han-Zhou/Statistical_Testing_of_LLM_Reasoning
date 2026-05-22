@@ -71,6 +71,7 @@ class BigBenchMovieDataset(Dataset):
         for i, row in enumerate(raw):
             entries.append(Datapoint(
                 id=f"bigbench_movie_{i}",
+                # id_original=row["id"],
                 question=row["question"],
                 ground_truth=row["ground_truth"],
             ))
@@ -99,16 +100,20 @@ class BigBenchMovieDataset(Dataset):
             ]
         
 
-    def evaluate(self, trajectory: TrajectoryRecord) -> EvaluationResult:
+    def evaluate(self, trajectory: TrajectoryRecord) -> None:
+        """
+        mutates the trajectory record by filling in the evaluation_result field, which includes correctness and other evaluation metadata.
+        """
         ground_truth = trajectory.ground_truth
         prediction = trajectory.final_answer
 
         if prediction is None:
-            return EvaluationResult(
+            trajectory.evaluation_result = EvaluationResult(
                 correct=False,
                 score=None,
                 llm_judge_applicable=False,
             )
+            return
 
         # Normalize MCQ ground truth: strip surrounding parens/brackets so "(C)" -> "C" to match the extractor output format
         gt_stripped = str(ground_truth).strip()
@@ -119,7 +124,7 @@ class BigBenchMovieDataset(Dataset):
 
         result = exact_match(prediction, str(ground_truth))
 
-        return EvaluationResult(
+        trajectory.evaluation_result = EvaluationResult(
             correct=result,
             score=None,
             llm_judge_applicable=False,

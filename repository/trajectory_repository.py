@@ -4,17 +4,18 @@ Trajectory Repository is the bridge between the trajectory data and the rest of 
 
 import json
 import logging
-from dataclasses import fields, replace
+from dataclasses import asdict, fields, replace
 from pathlib import Path
 
-from domain.data import TrajectoryRecord
+from domain import TrajectoryRecord, ConfidenceScores, Timings, EvaluationResult
 
 logger = logging.getLogger(__name__)
 
 
 class TrajectoryRepository:
-    def __init__(self, trajectory_data_path: Path):
-        self.trajectory_data_path = trajectory_data_path
+    def __init__(self, trajectory_data_path: Path | str):
+        self.trajectory_data_path = Path(trajectory_data_path) if isinstance(trajectory_data_path, str) else trajectory_data_path
+        self.trajectory_data_path.mkdir(parents=True, exist_ok=True)
 
     def load(self, index: int, sample: int | None = None) -> TrajectoryRecord:
         if sample is not None:
@@ -28,7 +29,19 @@ class TrajectoryRepository:
     
         with open(file_path, "r") as f:
             data = json.load(f)
-        
+
+        evaluation_result = data.get("evaluation_result")
+        if evaluation_result is not None:
+            evaluation_result = EvaluationResult(**evaluation_result)
+
+        confidences = data.get("confidences")
+        if confidences is not None:
+            confidences = ConfidenceScores(**confidences)
+
+        timings = data.get("timings")
+        if timings is not None:
+            timings = Timings(**timings)
+
         return TrajectoryRecord(
             id=data["id"],
             question=data["question"],
@@ -37,20 +50,25 @@ class TrajectoryRepository:
             cot_steps=data.get("cot_steps", []),
             final_answer=data.get("final_answer", None),
             ground_truth=data["ground_truth"],
-            correct=data.get("correct", None),
+            evaluation_result=evaluation_result,
             #  NOTE: not sure if we are even saving prompt_cache
             # prompt_cache_path=data.get("prompt_cache_path", None)
             # NOTE: confidence + confidence_timing loading slightly hacky
-            confidences=data.get("confidences", None),
-            confidence_timings=data.get("confidence_timings", None)
+            confidences=confidences,
+            timings=timings,
         )
 
 
     def save(self, trajectory_record: TrajectoryRecord, sample: int | None = None):
+        # Extract rightmost int from trajectory_record.id
+        # Should be fine since all of our ids are in the format {dataset}_i
+        id_parts = str(trajectory_record.id).split('_')
+        record_id = id_parts[-1] if id_parts[-1].isdigit() else trajectory_record.id
+        
         if sample is not None:
-            file_name = f"traj_{trajectory_record.id}_sample_{sample}.json"
+            file_name = f"traj_{record_id}_sample_{sample}.json"
         else:
-            file_name = f"traj_{trajectory_record.id}.json"
+            file_name = f"traj_{record_id}.json"
         
         file_path = self.trajectory_data_path / file_name
         
@@ -66,10 +84,10 @@ class TrajectoryRepository:
                 "cot_steps": trajectory_record.cot_steps,
                 "final_answer": trajectory_record.final_answer,
                 "ground_truth": trajectory_record.ground_truth,
-                "correct": trajectory_record.correct,
+                "evaluation_result": asdict(trajectory_record.evaluation_result) if trajectory_record.evaluation_result is not None else None,
                 # "prompt_cache_path": trajectory_record.prompt_cache_path,
-                "confidences": trajectory_record.confidences,
-                "confidence_timings": trajectory_record.confidence_timings
+                "confidences": asdict(trajectory_record.confidences) if trajectory_record.confidences is not None else None,
+                "timings": asdict(trajectory_record.timings) if trajectory_record.timings is not None else None,
             }, f, indent=2)
         
 

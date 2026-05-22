@@ -1,0 +1,24 @@
+{
+  "id": "bigbench_movie_1",
+  "question": "Find a movie similar to The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption:\nOptions:\n(A) Street Fighter II The Animated Movie\n(B) The Sheltering Sky\n(C) The Boy Who Could Fly\n(D) Terminator 2 Judgment Day",
+  "prompt": "<|begin_of_text|><|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are an expert reasoning assistant. For every problem you receive, think carefully and reason step-by-step. Label each reasoning step as 'Step 1:', 'Step 2:', etc. After all steps, write your final answer on a new line in \\boxed{your answer} format. You must double-escape all LaTeX backslashes. For example, output \\boxed instead of \boxed.Keep your reasoning concise, and be brief in each step.When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFind a movie similar to The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption:\nOptions:\n(A) Street Fighter II The Animated Movie\n(B) The Sheltering Sky\n(C) The Boy Who Could Fly\n(D) Terminator 2 Judgment Day\n\nThink carefully about the movies listed and the options provided. Reason step-by-step before choosing the best answer.\n\nLet's think step-by-step.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+  "generated_text": "\n\nStep 1: Identify the common themes and elements of the given movies (The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption). These movies are known for their thought-provoking storytelling, complex plot twists, and often incorporate elements of drama, mystery, and social commentary.\n\nStep 2: Analyze each option to see which one shares similar elements with the given movies. \n\nStep 3: (A) Street Fighter II The Animated Movie is primarily an action-packed animation based on a popular video game. It lacks the complex storytelling and deep themes of the given movies.\n\nStep 4: (B) The Sheltering Sky is a drama film based on a novel, and it shares elements of mystery and drama, which could be a possible match.\n\nStep 5: (C) The Boy Who Could Fly is a fantasy drama film that explores themes of childhood, imagination, and the challenges faced by its protagonist. However, it doesn't match the level of complexity and depth found in the given movies.\n\nStep 6: (D) Terminator 2 Judgment Day is an action-packed science fiction film, but it lacks the complexity and depth of the given movies.\n\nStep 7: Based on the analysis, The Sheltering Sky shares elements of mystery and drama, making it the most suitable match among the options.\n\n\\boxed{B}<|eot_id|>",
+  "cot_steps": [
+    "Step 1: Identify the common themes and elements of the given movies (The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption). These movies are known for their thought-provoking storytelling, complex plot twists, and often incorporate elements of drama, mystery, and social commentary.",
+    "Step 2: Analyze each option to see which one shares similar elements with the given movies.",
+    "Step 3: (A) Street Fighter II The Animated Movie is primarily an action-packed animation based on a popular video game. It lacks the complex storytelling and deep themes of the given movies.",
+    "Step 4: (B) The Sheltering Sky is a drama film based on a novel, and it shares elements of mystery and drama, which could be a possible match.",
+    "Step 5: (C) The Boy Who Could Fly is a fantasy drama film that explores themes of childhood, imagination, and the challenges faced by its protagonist. However, it doesn't match the level of complexity and depth found in the given movies.",
+    "Step 6: (D) Terminator 2 Judgment Day is an action-packed science fiction film, but it lacks the complexity and depth of the given movies.",
+    "Step 7: Based on the analysis, The Sheltering Sky shares elements of mystery and drama, making it the most suitable match among the options."
+  ],
+  "final_answer": "B",
+  "ground_truth": "(D)",
+  "evaluation_result": {
+    "correct": false,
+    "score": null,
+    "llm_judge_applicable": false
+  },
+  "confidences": null,
+  "confidence_timings": null
+}

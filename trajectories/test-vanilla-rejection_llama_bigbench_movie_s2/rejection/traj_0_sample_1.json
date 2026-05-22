@@ -1,0 +1,20 @@
+{
+  "id": "bigbench_movie_0",
+  "question": "Find a movie similar to Batman, The Mask, The Fugitive, Pretty Woman:\nOptions:\n(A) The Front Page\n(B) Maelstrom\n(C) The Lion King\n(D) Lamerica",
+  "prompt": "<|begin_of_text|><|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are an expert reasoning assistant. For every problem you receive, think carefully and reason step-by-step. Label each reasoning step as 'Step 1:', 'Step 2:', etc. After all steps, write your final answer on a new line in \\boxed{your answer} format. You must double-escape all LaTeX backslashes. For example, output \\boxed instead of \boxed.Keep your reasoning concise, and be brief in each step.When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFind a movie similar to Batman, The Mask, The Fugitive, Pretty Woman:\nOptions:\n(A) The Front Page\n(B) Maelstrom\n(C) The Lion King\n(D) Lamerica\n\nThink carefully about the movies listed and the options provided. Reason step-by-step before choosing the best answer.\n\nLet's think step-by-step.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+  "generated_text": "\n\nStep 1: The movie Pretty Woman is a romantic comedy where a man falls in love with a prostitute. The Mask is an action-comedy with supernatural elements. The Fugitive is an action-thriller about a man on the run. Batman is a superhero action movie. These movies seem to be a mix of action, romance, comedy, and thriller elements.\n\nStep 2: Now, let's analyze the options provided. The Front Page is a classic comedy play and film about newspaper journalism, which doesn't match the mix of action, romance, and thriller elements. The Lion King is an animated fantasy drama with a strong focus on family and coming-of-age themes. Lamerica is a drama film that explores themes of identity and relationships. Maelstrom is an adventure film with elements of drama and supernatural themes, but it seems to fit the mix of action and thriller elements from the given movies.\n\nStep 3: Maelstrom seems to be the most similar to the mix of action, romance, comedy, and thriller elements from Batman, The Mask, The Fugitive, and Pretty Woman.<|eot_id|>",
+  "cot_steps": [
+    "Step 1: The movie Pretty Woman is a romantic comedy where a man falls in love with a prostitute. The Mask is an action-comedy with supernatural elements. The Fugitive is an action-thriller about a man on the run. Batman is a superhero action movie. These movies seem to be a mix of action, romance, comedy, and thriller elements.",
+    "Step 2: Now, let's analyze the options provided. The Front Page is a classic comedy play and film about newspaper journalism, which doesn't match the mix of action, romance, and thriller elements. The Lion King is an animated fantasy drama with a strong focus on family and coming-of-age themes. Lamerica is a drama film that explores themes of identity and relationships. Maelstrom is an adventure film with elements of drama and supernatural themes, but it seems to fit the mix of action and thriller elements from the given movies.",
+    "Step 3: Maelstrom seems to be the most similar to the mix of action, romance, comedy, and thriller elements from Batman, The Mask, The Fugitive, and Pretty Woman.<|eot_id|>"
+  ],
+  "final_answer": "",
+  "ground_truth": "(C)",
+  "evaluation_result": {
+    "correct": false,
+    "score": null,
+    "llm_judge_applicable": false
+  },
+  "confidences": null,
+  "confidence_timings": null
+}

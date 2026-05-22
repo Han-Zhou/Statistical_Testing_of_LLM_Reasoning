@@ -1,0 +1,23 @@
+{
+  "id": "bigbench_movie_1",
+  "question": "Find a movie similar to The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption:\nOptions:\n(A) Street Fighter II The Animated Movie\n(B) The Sheltering Sky\n(C) The Boy Who Could Fly\n(D) Terminator 2 Judgment Day",
+  "prompt": "<|begin_of_text|><|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are an expert reasoning assistant. For every problem you receive, think carefully and reason step-by-step. Label each reasoning step as 'Step 1:', 'Step 2:', etc. After all steps, write your final answer on a new line in \\boxed{your answer} format. You must double-escape all LaTeX backslashes. For example, output \\boxed instead of \boxed.Keep your reasoning concise, and be brief in each step.When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFind a movie similar to The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption:\nOptions:\n(A) Street Fighter II The Animated Movie\n(B) The Sheltering Sky\n(C) The Boy Who Could Fly\n(D) Terminator 2 Judgment Day\n\nThink carefully about the movies listed and the options provided. Reason step-by-step before choosing the best answer.\n\nLet's think step-by-step.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+  "generated_text": "\n\nStep 1: First, we need to identify the common themes and elements of the given movies: The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption. They often involve complex plots, unexpected twists, and philosophical undertones, especially in relation to reality and the human condition.\n\nStep 2: Among the options provided, we need to find a movie that shares these characteristics. Street Fighter II The Animated Movie is primarily an action-packed animated film and does not fit the theme of complex plots and philosophical undertones.\n\nStep 3: The Boy Who Could Fly is a supernatural drama film, but it does not have the same level of complexity and philosophical depth as the given movies.\n\nStep 4: The Sheltering Sky is a drama film with a mix of adventure and psychological elements, but it does not have the same twist-filled plot or reality-questioning themes as The Sixth Sense and The Matrix.\n\nStep 5: Terminator 2 Judgment Day, however, shares some elements of The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption, such as a complex plot, action, and philosophical undertones, particularly regarding the nature of reality and human existence.\n\nStep 6: Considering these points, Terminator 2 Judgment Day seems to be the best match for the given movies in terms of its themes and elements.\n\n\\boxed{(D)}<|eot_id|>",
+  "cot_steps": [
+    "Step 1: First, we need to identify the common themes and elements of the given movies: The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption. They often involve complex plots, unexpected twists, and philosophical undertones, especially in relation to reality and the human condition.",
+    "Step 2: Among the options provided, we need to find a movie that shares these characteristics. Street Fighter II The Animated Movie is primarily an action-packed animated film and does not fit the theme of complex plots and philosophical undertones.",
+    "Step 3: The Boy Who Could Fly is a supernatural drama film, but it does not have the same level of complexity and philosophical depth as the given movies.",
+    "Step 4: The Sheltering Sky is a drama film with a mix of adventure and psychological elements, but it does not have the same twist-filled plot or reality-questioning themes as The Sixth Sense and The Matrix.",
+    "Step 5: Terminator 2 Judgment Day, however, shares some elements of The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption, such as a complex plot, action, and philosophical undertones, particularly regarding the nature of reality and human existence.",
+    "Step 6: Considering these points, Terminator 2 Judgment Day seems to be the best match for the given movies in terms of its themes and elements."
+  ],
+  "final_answer": "(D)",
+  "ground_truth": "(D)",
+  "evaluation_result": {
+    "correct": false,
+    "score": null,
+    "llm_judge_applicable": false
+  },
+  "confidences": null,
+  "confidence_timings": null
+}

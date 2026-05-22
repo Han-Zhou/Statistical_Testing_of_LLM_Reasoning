@@ -1,0 +1,23 @@
+{
+  "id": "bigbench_movie_0",
+  "question": "Find a movie similar to Batman, The Mask, The Fugitive, Pretty Woman:\nOptions:\n(A) The Front Page\n(B) Maelstrom\n(C) The Lion King\n(D) Lamerica",
+  "prompt": "<|begin_of_text|><|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are an expert reasoning assistant. For every problem you receive, think carefully and reason step-by-step. Label each reasoning step as 'Step 1:', 'Step 2:', etc. After all steps, write your final answer on a new line in \\boxed{your answer} format. You must double-escape all LaTeX backslashes. For example, output \\boxed instead of \boxed.Keep your reasoning concise, and be brief in each step.When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFind a movie similar to Batman, The Mask, The Fugitive, Pretty Woman:\nOptions:\n(A) The Front Page\n(B) Maelstrom\n(C) The Lion King\n(D) Lamerica\n\nThink carefully about the movies listed and the options provided. Reason step-by-step before choosing the best answer.\n\nLet's think step-by-step.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+  "generated_text": "\n\nStep 1: Analyzing the common theme among the given movies - Batman, The Mask, The Fugitive, and Pretty Woman, it's clear that they all feature a protagonist who undergoes a transformation or adopts a new identity, often to achieve a specific goal or overcome adversity.\n\nStep 2: Considering the given options, we need to find a movie that shares this theme of transformation or identity change.\n\nStep 3: Eliminating The Lion King, as it is an animated film and doesn't fit the context of the other movies listed.\n\nStep 4: Eliminating Lamerica, as it doesn't match the theme of transformation or identity change, focusing more on the immigrant experience.\n\nStep 5: Looking at the remaining option, The Front Page, a 1931 screwball comedy film about a reporter and a convicted killer on the run. This fits the theme of transformation, as the characters change their identities to achieve their goals.\n\nStep 6: Comparing The Front Page with the original movies, there are similarities in the theme of identity change, and both are action-packed, making it a suitable match.\n\n\\boxed{A}<|eot_id|>",
+  "cot_steps": [
+    "Step 1: Analyzing the common theme among the given movies - Batman, The Mask, The Fugitive, and Pretty Woman, it's clear that they all feature a protagonist who undergoes a transformation or adopts a new identity, often to achieve a specific goal or overcome adversity.",
+    "Step 2: Considering the given options, we need to find a movie that shares this theme of transformation or identity change.",
+    "Step 3: Eliminating The Lion King, as it is an animated film and doesn't fit the context of the other movies listed.",
+    "Step 4: Eliminating Lamerica, as it doesn't match the theme of transformation or identity change, focusing more on the immigrant experience.",
+    "Step 5: Looking at the remaining option, The Front Page, a 1931 screwball comedy film about a reporter and a convicted killer on the run. This fits the theme of transformation, as the characters change their identities to achieve their goals.",
+    "Step 6: Comparing The Front Page with the original movies, there are similarities in the theme of identity change, and both are action-packed, making it a suitable match."
+  ],
+  "final_answer": "A",
+  "ground_truth": "(C)",
+  "evaluation_result": {
+    "correct": false,
+    "score": null,
+    "llm_judge_applicable": false
+  },
+  "confidences": null,
+  "confidence_timings": null
+}

@@ -1,0 +1,25 @@
+{
+  "id": "bigbench_movie_1",
+  "question": "Find a movie similar to The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption:\nOptions:\n(A) Street Fighter II The Animated Movie\n(B) The Sheltering Sky\n(C) The Boy Who Could Fly\n(D) Terminator 2 Judgment Day",
+  "prompt": "<|begin_of_text|><|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\nYou are an expert reasoning assistant. For every problem you receive, think carefully and reason step-by-step. Label each reasoning step as 'Step 1:', 'Step 2:', etc. After all steps, write your final answer on a new line in \\boxed{your answer} format. You must double-escape all LaTeX backslashes. For example, output \\boxed instead of \boxed.Keep your reasoning concise, and be brief in each step.When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFind a movie similar to The Sixth Sense, The Matrix, Forrest Gump, The Shawshank Redemption:\nOptions:\n(A) Street Fighter II The Animated Movie\n(B) The Sheltering Sky\n(C) The Boy Who Could Fly\n(D) Terminator 2 Judgment Day\n\nThink carefully about the movies listed and the options provided. Reason step-by-step before choosing the best answer.\n\nLet's think step-by-step.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+  "generated_text": "\n\nStep 1: The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption are all known for their thought-provoking and often unconventional storytelling, with a focus on character development and plot twists.\n\nStep 2: These movies are typically classified as dramas or science fiction, often incorporating elements of mystery, philosophy, and emotional depth.\n\nStep 3: The options provided can be evaluated based on their genre and tone to determine which one aligns most closely with the characteristics of the given movies.\n\nStep 4: Street Fighter II The Animated Movie is an action-packed animated film, which doesn't fit the dramatic or thought-provoking nature of the given movies.\n\nStep 5: The Sheltering Sky is a drama film, but its tone and style don't seem to match the mix of drama, mystery, and plot twists found in the given movies.\n\nStep 6: The Boy Who Could Fly is a fantasy drama film, but it doesn't share the same level of depth and complexity as the given movies.\n\nStep 7: Terminator 2 Judgment Day is an action-packed science fiction film that shares some elements of the given movies, such as a mix of drama and thought-provoking themes.\n\nStep 8: Based on the analysis, Terminator 2 Judgment Day appears to be the most similar to The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption in terms of its genre, tone, and themes.\n\n\\boxed{D}<|eot_id|>",
+  "cot_steps": [
+    "Step 1: The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption are all known for their thought-provoking and often unconventional storytelling, with a focus on character development and plot twists.",
+    "Step 2: These movies are typically classified as dramas or science fiction, often incorporating elements of mystery, philosophy, and emotional depth.",
+    "Step 3: The options provided can be evaluated based on their genre and tone to determine which one aligns most closely with the characteristics of the given movies.",
+    "Step 4: Street Fighter II The Animated Movie is an action-packed animated film, which doesn't fit the dramatic or thought-provoking nature of the given movies.",
+    "Step 5: The Sheltering Sky is a drama film, but its tone and style don't seem to match the mix of drama, mystery, and plot twists found in the given movies.",
+    "Step 6: The Boy Who Could Fly is a fantasy drama film, but it doesn't share the same level of depth and complexity as the given movies.",
+    "Step 7: Terminator 2 Judgment Day is an action-packed science fiction film that shares some elements of the given movies, such as a mix of drama and thought-provoking themes.",
+    "Step 8: Based on the analysis, Terminator 2 Judgment Day appears to be the most similar to The Sixth Sense, The Matrix, Forrest Gump, and The Shawshank Redemption in terms of its genre, tone, and themes."
+  ],
+  "final_answer": "D",
+  "ground_truth": "(D)",
+  "evaluation_result": {
+    "correct": true,
+    "score": null,
+    "llm_judge_applicable": false
+  },
+  "confidences": null,
+  "confidence_timings": null
+}

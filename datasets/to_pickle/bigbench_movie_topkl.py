@@ -17,7 +17,7 @@ def main() -> None:
 
     rows = []
     for i, dp in enumerate(datapoints):   
-        rows.append({"id": i, "question": dp.question, "ground_truth": dp.ground_truth, "original_id": dp.id})
+        rows.append({"id": dp.id, "question": dp.question, "ground_truth": dp.ground_truth})
 
     output_path = OUTPUT_DIR / OUTPUT_NAME
     with open(output_path, "wb") as f:

@@ -53,12 +53,12 @@ class LlamaAdapter(ModelAdapter):
 
     def _slice_cache(self, cache: KVCache, start: int, end: int) -> KVCache:
         sliced = copy.deepcopy(cache)
-        for idx in range(len(sliced.key_cache)):
-            k = sliced.key_cache[idx]
-            v = sliced.value_cache[idx]
+        for layer in sliced.layers:
+            k = layer.keys
+            v = layer.values
             if k is not None and k.dim() == 4:
-                sliced.key_cache[idx] = k[:, :, start:end, :]
-                sliced.value_cache[idx] = v[:, :, start:end, :]
+                layer.keys = k[:, :, start:end, :]
+                layer.values = v[:, :, start:end, :]
         if hasattr(sliced, '_seen_tokens'):
             sliced._seen_tokens = end - start
         return sliced
@@ -162,7 +162,7 @@ class LlamaAdapter(ModelAdapter):
         all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.scores])
 
         output_text= self.model.tokenizer.decode(outputs.sequences[0], skip_special_tokens=False)
-        output_tokens = self.convert_ids_to_tokens(outputs.sequences[0])
+        output_tokens = self.model.tokenizer.convert_ids_to_tokens(outputs.sequences[0])
         
         answer_span: AnswerSpan | None = self._locate_answer_span(output_text)
 

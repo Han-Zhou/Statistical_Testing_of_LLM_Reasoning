@@ -60,3 +60,10 @@ repo
     confidence.py
     evaluation.py
 ```
+
+
+
+
+NOTES:
+1. answer_prob and answer_ent extraction in T0-T1 to increase proformance
+2. Due to the Gated DeltaNet structure of Qwen, need to run solo forward pass over question prompt

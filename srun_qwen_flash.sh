@@ -1,11 +1,11 @@
 #!/bin/bash
 
 srun \
-    --job-name=debug_model-output \
+    --job-name=qwen_flash \
     --qos=high \
     --partition=compute \
     --nodes=1 \
-    --gres=gpu:1 \
+    --gres=gpu:2 \
     --time=2:00:00 \
     --mem=128G \
     --cpus-per-task=24 \
@@ -14,5 +14,5 @@ srun \
         module load cuda/12.4
         module load conda
         conda activate cot
-        scripts/test_llama_generation.sh
+        python3 temp_qwen_flash.py
     "

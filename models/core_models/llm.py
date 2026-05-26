@@ -1,4 +1,5 @@
 import logging
+import copy
 import torch
 from typing import Optional, Tuple
 from dotenv import load_dotenv
@@ -7,7 +8,7 @@ from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteriaList, StopStringCriteria
 from transformers.utils import ModelOutput
 
-from domain.data import LLMOutput
+from domain.data import LLMOutput, KVCache, CacheBundle
 from models.core_models.registry import MODEL_HF_REGISTRY
 
 load_dotenv()
@@ -70,7 +71,7 @@ class LLM():
                     do_sample=(temperature > 0.0),
                     temperature=temperature if temperature > 0.0 else None,
                     pad_token_id=self.tokenizer.eos_token_id,
-                    output_scores=True,
+                    output_logits=True,
                     stopping_criteria=stop_criteria,
                 )
             else:
@@ -81,7 +82,7 @@ class LLM():
                     do_sample=(temperature > 0.0),
                     temperature=temperature if temperature > 0.0 else None,
                     pad_token_id=self.tokenizer.eos_token_id,
-                    output_scores=True,
+                    output_logits=True,
                     stopping_criteria=stop_criteria,
                 )
 
@@ -112,4 +113,17 @@ class LLM():
             )
 
         return outputs
+
+
+    def align_cache(self, cache: Optional[CacheBundle], prompt_text: str) -> KVCache | None:
+        if cache is None:
+            return None
+
+        new_input_ids = self.tokenizer(prompt_text, return_tensors="pt").input_ids[0]
+        lcp = cache.longest_common_prefix(new_input_ids)
+
+        aligned_cache = copy.deepcopy(cache.cache)
+        aligned_cache.crop(lcp)
+
+        return aligned_cache
 

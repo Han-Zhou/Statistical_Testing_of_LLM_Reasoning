@@ -1,10 +1,10 @@
 import re
 import copy
 
-from domain.data import LLMOutput, ParsedOutputGeneration, KVCache
+from domain.data import LLMOutput, ParsedOutputGeneration, KVCache, CacheBundle, AnswerSpan
 
 
-from models.adapters.base import ModelAdapter, AnswerSpan
+from models.adapters.base import ModelAdapter
 from models.core_models.llm import LLM
 from models.adapters.registry import MODEL_ATTENTION_IMPLEMENTATION_REGISTRY
 
@@ -70,7 +70,7 @@ class LlamaAdapter(ModelAdapter):
                 return token_idx
         raise ValueError(f"Character index {char_idx} not found in any token span")
 
-    def _extract_cot(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], cache: KVCache, answer_span: AnswerSpan | None) -> tuple[list[str], str, str, KVCache, KVCache]:
+    def _extract_cot(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], cache: KVCache, sequence_ids: torch.Tensor, answer_span: AnswerSpan | None) -> tuple[list[str], str, str, CacheBundle, KVCache]:
         start_assistant_text = "<|start_header_id|>assistant<|end_header_id|>"
         cot_start_idx = output_text.find(start_assistant_text) + len(start_assistant_text)
         # text_cot_with_answer contains basically everything after the "assistant" header
@@ -115,12 +115,17 @@ class LlamaAdapter(ModelAdapter):
                     cache.value_cache[idx] = cache.value_cache[idx][:, :, :max_length, :]
 
 
-        return cot_steps, text_cot, text_cot_with_answer, cot_with_answer_cache, question_cache
+        whole_cache = CacheBundle(
+            cache=cot_with_answer_cache,
+            input_ids=sequence_ids[cot_start_token_idx:].detach().cpu().clone(),
+        )
+
+        return cot_steps, text_cot, text_cot_with_answer, whole_cache, question_cache
 
 
 
     # cot_steps: list[str]
-    # cot_with_answer_cache: KVCache
+    # whole_cache: KVCache
     # question_cache: KVCache
 
 
@@ -159,14 +164,14 @@ class LlamaAdapter(ModelAdapter):
         offset_mappings = llm_outputs.offset_mappings
 
         # all_probs contains probabilities for all tokens, including the question tokens
-        all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.scores])
+        all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.logits])
 
         output_text= self.model.tokenizer.decode(outputs.sequences[0], skip_special_tokens=False)
         output_tokens = self.model.tokenizer.convert_ids_to_tokens(outputs.sequences[0])
         
         answer_span: AnswerSpan | None = self._locate_answer_span(output_text)
 
-        cot_steps, text_cot, text_cot_with_answer, cot_with_answer_cache, question_cache = self._extract_cot(output_text, output_tokens, offset_mappings, outputs.past_key_values, answer_span)
+        cot_steps, text_cot, text_cot_with_answer, whole_cache, question_cache = self._extract_cot(output_text, output_tokens, offset_mappings, outputs.past_key_values, outputs.sequences[0], answer_span)
 
         final_answer, answer_token_probs = self._extract_answer_and_probs(output_text, output_tokens, offset_mappings, all_probs)
 
@@ -175,7 +180,7 @@ class LlamaAdapter(ModelAdapter):
             final_answer=final_answer,
             text_cot=text_cot,
             text_cot_with_answer=text_cot_with_answer,
-            cot_with_answer_cache=cot_with_answer_cache,
+            whole_cache=whole_cache,
             question_cache=question_cache,
             answer_token_probs=answer_token_probs,
         )

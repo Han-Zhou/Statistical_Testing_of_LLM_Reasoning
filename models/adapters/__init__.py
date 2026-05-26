@@ -1,5 +1,6 @@
-from .base import ModelAdapter
+from .base import ModelAdapter, ModelScorer
 
 __all__ = [
-    "ModelAdapter"
+    "ModelAdapter",
+    "ModelScorer"
 ]

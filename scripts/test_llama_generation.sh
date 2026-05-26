@@ -1,3 +1,8 @@
+# NOTE
+# tests:
+# - generation
+# - vanilla confidence
+
 python3 main.py \
     --backend hf \
     --confidence none \
@@ -9,4 +14,4 @@ python3 main.py \
     --prompt_type 2 \
     --nb_cot_samples 4 \
     --temperature 0.9 \
-    --tag test-vanilla-rejection
+    --tag test-525-vanilla

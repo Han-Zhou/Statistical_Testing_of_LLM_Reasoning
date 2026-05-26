@@ -1,29 +1,43 @@
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Literal, Protocol, Sequence, Optional, Tuple
 
 from models.core_models import LLM, API_LLM
-from domain.data import LLMOutput, ParsedOutputGeneration, CachedPrefix
+from domain import LLMOutput, ParsedOutputGeneration, CacheBundle, ScorerOutput
 
 
 Mode = Literal["generation", "confidence"]
 
 
-@dataclass
-class AnswerSpan:
-    char_answer_sentence_start: int
-    char_answer_boxed_start: int
-    char_answer_boxed_end: int
+"""
+ModelScorer handles the confidence scoring - Indirect and Verbal
+"""
+class ModelScorer(ABC):
+    def __init__(self, model: LLM | API_LLM):
+        self.model: LLM | API_LLM = model
+
+    @abstractmethod
+    def forward_indirect(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
+        ...
+
+    @abstractmethod
+    def forward_verbal(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
+        ...
 
 
-
+"""
+ModelAdapter is the adapter between the runner and the core LLM / API_LLM. 
+- handles prompt processing and output parsing
+- handles generation
+- delegates confidence scoring to ModelScorer
+"""
 class ModelAdapter(ABC):
     def __init__(self):
         self.model: LLM | API_LLM
+        self.model_scorer: ModelScorer
 
     @abstractmethod
-    def align_cache(self, cache: Optional[CachedPrefix], prompt_text: str) -> Optional[CachedPrefix]:
+    def align_cache(self, cache: Optional[CacheBundle], prompt_text: str) -> Optional[CacheBundle]:
         ...
 
 
@@ -40,7 +54,7 @@ class ModelAdapter(ABC):
             self, 
             messages: list[dict[str, str]],
             max_tokens: int, 
-            cache: Optional[CachedPrefix] = None, 
+            cache: Optional[CacheBundle] = None,
             # stop_strings: list[str] = None, 
             temperature: float = 0.0
         ) -> ParsedOutputGeneration:
@@ -54,6 +68,11 @@ class ModelAdapter(ABC):
             temperature=temperature
         )
         return self.process_generation_output(output)
+
+
+    def scorer(self) -> ModelScorer:
+        return self.model_scorer
+
 
 
 

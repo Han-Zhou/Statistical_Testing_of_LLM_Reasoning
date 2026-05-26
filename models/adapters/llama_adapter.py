@@ -3,12 +3,13 @@ import copy
 
 from typing import Optional
 
-from domain.data import LLMOutput, ParsedOutputGeneration, KVCache, CachedPrefix
+from domain import LLMOutput, ParsedOutputGeneration, KVCache, CacheBundle, AnswerSpan, ScorerOutput
 
 
-from models.adapters.base import ModelAdapter, AnswerSpan
+from models.adapters.base import ModelAdapter, ModelScorer
 from models.core_models.llm import LLM
-from models.adapters.registry import MODEL_ATTENTION_IMPLEMENTATION_REGISTRY
+from models.adapters.registry import MODEL_ATTENTION_IMPLEMENTATION_REGISTRY, ANSWER_TOKENS
+from models.adapters.shared_utils import _locate_answer_span, _char_to_token_idx
 
 
 
@@ -16,47 +17,102 @@ import torch.nn.functional as F
 import torch
 
 
+
+class LlamaScorer(ModelScorer):
+    def __init__(self, model: LLM):
+        self.model = model
+
+    def forward_indirect(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
+        """
+        forward_indirect runs a forward pass on the prompt with indirect suffix, and returns the logitsfor the indirect tokens. These are 'True' and 'False' tokens generated last
+        """
+        cache = self.model.align_cache(whole_cache, prompt)
+
+        outputs = self.model.forward(prompt, cache=cache)
+        last_logits = outputs.logits[0, -1, :]
+
+        tok = self.model.tokenizer
+        true_id = tok(ANSWER_TOKENS[' True'][0], add_special_tokens=False).input_ids[0]
+        false_id = tok(ANSWER_TOKENS[' False'][0], add_special_tokens=False).input_ids[0]
+
+        return {
+            'True': last_logits[true_id].detach().cpu(),
+            'False': last_logits[false_id].detach().cpu(),
+        }
+
+
+    def forward_verbal(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
+        """
+        forward_verbal runs a forward pass on the prompt with verbal suffix, and returns the logits for the verbal tokens. These are the tokens generated last.
+        For llama, we are lucky such that every integer [0, 100] has its own token, so we only need one forward pass
+        """
+        cache = self.model.align_cache(whole_cache, prompt)
+
+        outputs = self.model.forward(prompt, cache=cache)
+        last_logits = outputs.logits[0, -1, :]
+
+        tok = self.model.tokenizer
+        return {
+            s: last_logits[tok(s, add_special_tokens=False).input_ids[0]].detach().cpu()
+            for s in ANSWER_TOKENS['llama_verbal_confidence']
+        }
+
+
+
+    def forward_continuations(
+        self,
+        continuation_texts: list[str],
+        cache: KVCache,
+        last_prompt_token_id: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Batched forward pass over N candidate continuations conditioned on `cache`.
+        
+        Returns:
+            logits:  [N, T_max, vocab_size] where logits[n, i] predicts the i-th
+                    candidate token of continuation n (i.e., aligned with the
+                    candidate tokens themselves, not shifted by one).
+            lengths: [N] true token length of each continuation (for masking padding).
+        """
+        tok = self.model.tokenizer
+        pad_id = tok.pad_token_id if tok.pad_token_id is not None else 0
+
+        cand_ids = [tok(c, add_special_tokens=False).input_ids for c in continuation_texts]
+        lengths = torch.tensor([len(ids) for ids in cand_ids])
+        T_max = int(lengths.max().item())
+        N = len(cand_ids)
+
+        batched = torch.full((N, T_max + 1), pad_id, dtype=torch.long)
+        batched[:, 0] = last_prompt_token_id
+        for i, ids in enumerate(cand_ids):
+            batched[i, 1:1 + len(ids)] = torch.tensor(ids)
+        batched = batched.to(self.model.device)
+
+        short_cache = self._slice_cache(cache, 0, -1)
+        batched_cache = self._replicate_cache(short_cache, N) if N > 1 else short_cache
+
+        with torch.no_grad():
+            out = self.model.model(
+                input_ids=batched,
+                past_key_values=batched_cache,
+                use_cache=False,
+            )
+        # out.logits: [N, T_max+1, vocab]
+        # out.logits[:, :-1] aligns with the candidate token positions
+        # out.logits[:, -1]  is the next-token-after-continuation distribution
+        return out.logits.detach(), lengths
+
+
+
+
+
 class LlamaAdapter(ModelAdapter):
     def __init__(self):
         attention_implementation = MODEL_ATTENTION_IMPLEMENTATION_REGISTRY.get("llama")
         self.model = LLM(model_name="llama", attention_implementation=attention_implementation)
+        self.model_scorer = LlamaScorer(self.model)
 
-    def _locate_answer_span(self, output_text: str, search_start: int = 0) -> AnswerSpan | None:
-        # search_start scopes the search past the prompt — the system prompt
-        # itself contains the literal "\boxed{your answer}", which would
-        # otherwise be matched as the model's final answer.
-        m = re.compile(r'\\boxed\{').search(output_text, search_start)
-        if m is None:
-            return None
 
-        content_start = m.end()          # char after the opening '{'
-        depth = 1
-        i = content_start
-        while i < len(output_text) and depth > 0:
-            c = output_text[i]
-            if c == '{':
-                depth += 1
-            elif c == '}':
-                depth -= 1
-            i += 1
-        if depth != 0:
-            return None  # Unmatched braces
-        content_end = i - 1              # index of the closing '}'
-
-        sentence_start = max(
-            output_text.rfind('. ', search_start, m.start()),
-            output_text.rfind('\n', search_start, m.start()),
-        ) + 1
-        if sentence_start < search_start:
-            sentence_start = search_start
-        while sentence_start < m.start() and output_text[sentence_start] == ' ':
-            sentence_start += 1
-
-        return AnswerSpan(
-            char_answer_sentence_start=sentence_start,
-            char_answer_boxed_start=content_start,
-            char_answer_boxed_end=content_end,
-        )
 
     def _slice_cache(self, cache: KVCache, start: int, end: int) -> KVCache:
         sliced = copy.deepcopy(cache)
@@ -71,14 +127,8 @@ class LlamaAdapter(ModelAdapter):
         return sliced
 
 
-    def _char_to_token_idx(self, char_idx: int, offset_mappings: list[tuple[int, int]]) -> int:
-        for token_idx, (start, end) in enumerate(offset_mappings):
-            if start <= char_idx < end:
-                return token_idx
-        raise ValueError(f"Character index {char_idx} not found in any token span")
 
-
-    def _extract_cot(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], cache: KVCache, sequence_ids: torch.Tensor, cot_start_idx: int, answer_span: AnswerSpan | None) -> tuple[list[str], str, str, str, KVCache, CachedPrefix]:
+    def _extract_cot(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], cache: KVCache, sequence_ids: torch.Tensor, cot_start_idx: int, answer_span: AnswerSpan | None) -> tuple[list[str], str, str, str, KVCache, CacheBundle]:
         # text_cot_with_answer contains basically everything after the "assistant" header
         text_cot_with_answer = output_text[cot_start_idx:]
         text_question = output_text[:cot_start_idx]
@@ -108,19 +158,22 @@ class LlamaAdapter(ModelAdapter):
             cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
 
 
-        # Split the cache at the assistant-header boundary. CachedPrefix.cropped_to
+        # Split the cache at the assistant-header boundary. CacheBundle.cropped_to
         # handles BPE drift downstream via longest_common_prefix, so we don't need
         # to back off by a token here.
-        cot_start_token_idx = self._char_to_token_idx(cot_start_idx, offset_mappings)
-        question_cache = copy.deepcopy(cache)
-        question_cache.crop(cot_start_token_idx)
-        question_prefix = CachedPrefix(
-            cache=question_cache,
+        cot_start_token_idx = _char_to_token_idx(self, cot_start_idx, offset_mappings)
+        question_kv = copy.deepcopy(cache)
+        question_kv.crop(cot_start_token_idx)
+        question_cache = CacheBundle(
+            cache=question_kv,
             input_ids=sequence_ids[:cot_start_token_idx].detach().cpu().clone(),
         )
-        cot_with_answer_cache = self._slice_cache(cache, cot_start_token_idx, None)
+        whole_cache = CacheBundle(
+            cache=copy.deepcopy(cache),
+            input_ids=sequence_ids[:cache.get_seq_length()].detach().cpu().clone(),
+        )
 
-        return cot_steps, text_question, text_cot, text_cot_with_answer, cot_with_answer_cache, question_prefix
+        return cot_steps, text_question, text_cot, text_cot_with_answer, whole_cache, question_cache
 
 
     def _extract_answer_and_probs(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], all_probs: torch.Tensor, answer_span: AnswerSpan | None) -> tuple[str, torch.Tensor]:
@@ -130,8 +183,8 @@ class LlamaAdapter(ModelAdapter):
         final_answer = output_text[answer_span.char_answer_boxed_start:answer_span.char_answer_boxed_end].strip()
 
         # these token indices are absolute
-        answer_start_token_idx = self._char_to_token_idx(answer_span.char_answer_boxed_start, offset_mappings)
-        answer_end_token_idx = self._char_to_token_idx(answer_span.char_answer_boxed_end, offset_mappings)
+        answer_start_token_idx = _char_to_token_idx(self, answer_span.char_answer_boxed_start, offset_mappings)
+        answer_end_token_idx = _char_to_token_idx(self, answer_span.char_answer_boxed_end, offset_mappings)
 
         # all_probs is relative to the start of generation, so we need to shift these token indices by the number of question tokens
         num_question_tokens = len(output_tokens) - all_probs.shape[0]
@@ -141,17 +194,8 @@ class LlamaAdapter(ModelAdapter):
 
 
 
-    def align_cache(self, cache: Optional[CachedPrefix], prompt_text: str) -> KVCache | None:
-        if cache is None:
-            return None
-
-        new_input_ids = self.model.tokenizer(prompt_text, return_tensors="pt").input_ids[0]
-        lcp = cache.longest_common_prefix(new_input_ids)
-
-        aligned_cache = copy.deepcopy(cache.cache)
-        aligned_cache.crop(lcp)
-
-        return aligned_cache
+    def align_cache(self, cache: Optional[CacheBundle], prompt_text: str) -> KVCache | None:
+        return self.model.align_cache(cache, prompt_text)
 
 
     def render_prompt(self, messages: list[dict[str, str]]) -> str:
@@ -184,7 +228,7 @@ class LlamaAdapter(ModelAdapter):
         offset_mappings = llm_outputs.offset_mappings
 
         # all_probs contains probabilities for all tokens, including the question tokens
-        all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.scores])
+        all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.logits])
 
         output_text= self.model.tokenizer.decode(outputs.sequences[0], skip_special_tokens=False)
         output_tokens = self.model.tokenizer.convert_ids_to_tokens(outputs.sequences[0])
@@ -192,10 +236,10 @@ class LlamaAdapter(ModelAdapter):
         start_assistant_text = "<|start_header_id|>assistant<|end_header_id|>"
         cot_start_idx = output_text.find(start_assistant_text) + len(start_assistant_text)
 
-        answer_span: AnswerSpan | None = self._locate_answer_span(output_text, search_start=cot_start_idx)
+        answer_span: AnswerSpan | None = _locate_answer_span(self, output_text, search_start=cot_start_idx)
 
         # answer_span needed to get text_cot
-        cot_steps, text_question, text_cot, text_cot_with_answer, cot_with_answer_cache, question_prefix = self._extract_cot(output_text, output_tokens, offset_mappings, outputs.past_key_values, outputs.sequences[0], cot_start_idx, answer_span)
+        cot_steps, text_question, text_cot, text_cot_with_answer, whole_cache, question_cache = self._extract_cot(output_text, output_tokens, offset_mappings, outputs.past_key_values, outputs.sequences[0], cot_start_idx, answer_span)
 
         # answer_span needed to get final_answer and answer_token_probs
         final_answer, answer_token_probs = self._extract_answer_and_probs(output_text, output_tokens, offset_mappings, all_probs, answer_span)
@@ -206,8 +250,8 @@ class LlamaAdapter(ModelAdapter):
             text_question=text_question,
             text_cot=text_cot,
             text_cot_with_answer=text_cot_with_answer,
-            cot_with_answer_cache=cot_with_answer_cache,
-            question_prefix=question_prefix,
+            whole_cache=whole_cache,
+            question_cache=question_cache,
             answer_token_probs=answer_token_probs,
         )
 

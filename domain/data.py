@@ -19,7 +19,7 @@ KVCache: TypeAlias = DynamicCache | Qwen3_5DynamicCache
 
 
 @dataclass(frozen=True)
-class CachedPrefix:
+class CacheBundle:
     """
     A KV cache bundled with the input_ids it was computed from.
     """
@@ -45,6 +45,13 @@ class CachedPrefix:
         cached = self.input_ids[:limit].to(new_ids.device)
         mismatches = new_ids[:limit].ne(cached).nonzero(as_tuple=False)
         return limit if mismatches.numel() == 0 else int(mismatches[0].item())
+
+
+@dataclass
+class AnswerSpan:
+    char_answer_sentence_start: int
+    char_answer_boxed_start: int
+    char_answer_boxed_end: int
 
 
 @dataclass
@@ -109,8 +116,8 @@ class ParsedOutputGeneration:
     text_question: str
     text_cot: str
     text_cot_with_answer: str
-    cot_with_answer_cache: KVCache
-    question_prefix: CachedPrefix
+    whole_cache: CacheBundle
+    question_cache: CacheBundle
     answer_token_probs: torch.Tensor
 
 

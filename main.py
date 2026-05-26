@@ -97,6 +97,12 @@ def parse():
         help="Number of samples to process from the dataset. Defaults to all."
     )
     args.add_argument(
+        "--seed_stepbootstrap",
+        type=int,
+        default=0,
+        help="Seed for random number generation for StepBootstrap sampling. Defaults to 0."
+    )
+    args.add_argument(
         "--tag",
         type=str,
         default=None,

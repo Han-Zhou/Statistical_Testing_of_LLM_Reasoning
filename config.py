@@ -55,12 +55,14 @@ class ConfidenceConfig:
 class SamplingConfig:
     temperature: float
     nb_cot_samples: int
+    seed_stepbootstrap: int
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "SamplingConfig":
         return cls(
             temperature=args.temperature,
             nb_cot_samples=args.nb_cot_samples,
+            seed_stepbootstrap=args.seed_stepbootstrap,
         )
 
 

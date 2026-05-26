@@ -69,6 +69,20 @@ class ModelAdapter(ABC):
         )
         return self.process_generation_output(output)
 
+    def forward_pass(
+            self, 
+            messages: list[dict[str, str]],
+            cache: Optional[CacheBundle] = None,
+        ) -> ParsedOutputGeneration:
+        prompt_text = self.render_prompt(messages)
+        cache = self.align_cache(cache, prompt_text)
+        output = self.model.forward_pass(
+            prompt=prompt_text,
+            cache=cache,
+        )
+        return self.process_generation_output(output)
+
+
 
     def scorer(self) -> ModelScorer:
         return self.model_scorer

@@ -6,7 +6,7 @@ from pipeline.sampling.base import SamplingMethod
 
 from config import GenerationConfig, SamplingConfig
 from models.adapters.base import ModelAdapter
-from domain.data import Datapoint, ParsedOutputGeneration, PromptRequest, KVCache, CachedPrefix
+from domain.data import Datapoint, ParsedOutputGeneration, PromptRequest, KVCache, CacheBundle
 
 from pipeline.sampling.context import SampleContext
 
@@ -37,7 +37,7 @@ class RejectionSampling(SamplingMethod):
             generate_output: ParsedOutputGeneration = self.context.model_adapter.generate(
                 messages=messages,
                 max_tokens=self.generation_config.max_tokens,
-                cache=self.context.reference_vanilla_question_prefix,
+                cache=self.context.reference_vanilla_question_cache,
                 temperature=self.sampling_config.temperature,
             )
 

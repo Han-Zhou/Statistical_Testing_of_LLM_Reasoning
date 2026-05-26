@@ -200,9 +200,7 @@ class LlamaAdapter(ModelAdapter):
 
     def render_prompt(self, messages: list[dict[str, str]]) -> str:
         """Converts messages dict to a prompt_text with proper chat template applied"""
-        has_assistant_prefill = False
-        if "assistant" in messages:
-            has_assistant_prefill = True
+        has_assistant_prefill = any(m.get("role") == "assistant" for m in messages)
 
         if has_assistant_prefill:
             prompt_text = self.model.tokenizer.apply_chat_template(
@@ -227,8 +225,28 @@ class LlamaAdapter(ModelAdapter):
         outputs = llm_outputs.outputs
         offset_mappings = llm_outputs.offset_mappings
 
-        # all_probs contains probabilities for all tokens, including the question tokens
-        all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.logits])
+        # all_probs[k] = distribution that produced output_tokens[num_question_tokens + k],
+        # where num_question_tokens = len(output_tokens) - all_probs.shape[0]
+        # is computed downstream in _extract_answer_and_probs.
+        #
+        # outputs.logits comes in two different shapes depending on which API
+        # produced it, and we have to normalize them to that semantics:
+        #   generate path  -> tuple of T_new tensors each [1, vocab], one per
+        #                     generated token (only the new tokens have logits).
+        #   forward path   -> single tensor [1, T_delta, vocab] over the delta
+        #                     tokens fed past the cache. logits[0, i] predicts
+        #                     the token at delta position i+1.
+        if isinstance(outputs.logits, tuple):
+            # Generate path: each tuple element is already the distribution that
+            # produced its generated token, so stacking gives the right semantics.
+            all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.logits])
+        else:
+            # Forward path: drop the last row so row k = "produced delta token k+1"
+            # i.e. output_tokens[cache_len + 1 + k]. The very first delta token's
+            # producing logits live in the cached prefix and aren't returned by
+            # model.__call__(), so we lose that one position -- this is fine here
+            # because answer tokens always sit deep in the delta, not at its boundary.
+            all_probs: torch.Tensor = F.softmax(outputs.logits[0, :-1, :], dim=-1)
 
         output_text= self.model.tokenizer.decode(outputs.sequences[0], skip_special_tokens=False)
         output_tokens = self.model.tokenizer.convert_ids_to_tokens(outputs.sequences[0])

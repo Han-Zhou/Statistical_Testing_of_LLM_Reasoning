@@ -47,7 +47,7 @@ class LLM():
             cache: Optional[Tuple], 
             # stop_strings: list[str], 
             temperature: float
-        ) -> ModelOutput:
+        ) -> LLMOutput:
         # Generate text based on the prompt
         # prompt SHOULD ALREADY HAVE chat template applied
         logger.info(f"Generating text with model {self.model_name}")
@@ -99,13 +99,26 @@ class LLM():
 
 
     def forward(self, prompt: str, cache: Optional[Tuple] = None, output_hidden_states: bool = False) -> ModelOutput:
+        """
+        Used for confidence scoring
+        """
         logger.info(f"Forward pass with model {self.model_name}")
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        full_input_ids = inputs.input_ids
+
+        # When a cache is provided, only feed the delta tokens. model.__call__()
+        # (unlike model.generate()) does not slice input_ids against past_key_values,
+        # so passing the full prompt would double-count the cached prefix.
+        if cache is not None:
+            cache_len = cache.get_seq_length()
+            model_input_ids = full_input_ids[:, cache_len:]
+        else:
+            model_input_ids = full_input_ids
 
         with torch.inference_mode():
             outputs = self.model(
-                **inputs,
+                input_ids=model_input_ids,
                 past_key_values=cache,
                 use_cache=cache is not None,
                 output_hidden_states=output_hidden_states,
@@ -113,6 +126,53 @@ class LLM():
             )
 
         return outputs
+
+
+    def forward_pass(
+        self,
+        prompt: str,
+        cache: Optional[Tuple] = None,
+    ) -> LLMOutput:
+        """
+        different than forward function:
+        - this is basically a generate with 0 tokens generated
+        - for usage by stepbootstrap sampling
+        """
+        logger.info(f"Forward pass with model {self.model_name}")
+
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        full_input_ids = inputs.input_ids
+
+        # When a cache is provided, only feed the delta tokens. model.__call__()
+        # (unlike model.generate()) does not slice input_ids against past_key_values,
+        # so passing the full prompt would double-count the cached prefix.
+        if cache is not None:
+            cache_len = cache.get_seq_length()
+            model_input_ids = full_input_ids[:, cache_len:]
+        else:
+            model_input_ids = full_input_ids
+
+        with torch.inference_mode():
+            outputs = self.model(
+                input_ids=model_input_ids,
+                past_key_values=cache,
+                use_cache=True,
+                return_dict=True,
+            )
+
+        # Attach the full input_ids as 'sequences' to mimic model.generate() API.
+        # After this forward pass, the cache covers exactly full_input_ids.
+        outputs.sequences = full_input_ids
+
+        output_text = self.tokenizer.decode(outputs.sequences[0], skip_special_tokens=False)
+        full_offsets = self.tokenizer(
+            output_text,
+            return_offsets_mapping=True,
+            add_special_tokens=False,
+        )["offset_mapping"]
+
+        return LLMOutput(outputs=outputs, offset_mappings=full_offsets)
+
 
 
     def align_cache(self, cache: Optional[CacheBundle], prompt_text: str) -> KVCache | None:

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from datasets import Dataset
 from models.adapters import ModelAdapter
-from domain.data import CachedPrefix, Datapoint
+from domain.data import CacheBundle, Datapoint
 
 @dataclass
 class SampleContext:
@@ -12,7 +12,7 @@ class SampleContext:
     datapoint: Datapoint | None = None
     reference_vanilla_cot: list[str] | None = None
     reference_vanilla_final_answer: str | None = None
-    reference_vanilla_question_prefix: CachedPrefix | None = None
+    reference_vanilla_question_cache: CacheBundle | None = None
 
     def clear(self):
         for field_name in list(self.__dataclass_fields__):

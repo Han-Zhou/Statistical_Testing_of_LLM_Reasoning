@@ -163,8 +163,15 @@ class LlamaAdapter(ModelAdapter):
         outputs = llm_outputs.outputs
         offset_mappings = llm_outputs.offset_mappings
 
-        # all_probs contains probabilities for all tokens, including the question tokens
-        all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.logits])
+        # See llama_adapter.process_generation_output for the full rationale.
+        # outputs.logits arrives as a tuple of [1, vocab] (generate path) or as
+        # a single [1, T_delta, vocab] (forward path); normalize to a 2D tensor
+        # [T_scored, vocab] where row k is the distribution that produced the
+        # k-th token after the question prefix.
+        if isinstance(outputs.logits, tuple):
+            all_probs: torch.Tensor = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in outputs.logits])
+        else:
+            all_probs: torch.Tensor = F.softmax(outputs.logits[0, :-1, :], dim=-1)
 
         output_text= self.model.tokenizer.decode(outputs.sequences[0], skip_special_tokens=False)
         output_tokens = self.model.tokenizer.convert_ids_to_tokens(outputs.sequences[0])

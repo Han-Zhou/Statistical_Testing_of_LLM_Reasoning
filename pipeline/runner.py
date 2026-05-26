@@ -159,9 +159,8 @@ class Runner:
         T0 = time.perf_counter()
         lawyer_generation_outputs: list[ParsedOutputGeneration] = self.lawyer_sampling.generate()
         T1 = time.perf_counter()
-        # lawyer_confidences = [self.confidence_engine.compute_confidence(output) for output in lawyer_generation_outputs]
+        lawyer_confidences = [self.confidence_engine.compute_confidence(output) for output in lawyer_generation_outputs]
         T2 = time.perf_counter()
-        lawyer_timings = {"generation_time": T1-T0, "confidence_time": T2-T1}
 
         # save lawyer trajectories
         for i, lawyer_generation_output in enumerate(lawyer_generation_outputs):
@@ -174,7 +173,7 @@ class Runner:
                     cot_steps=lawyer_generation_output.cot_steps,
                     final_answer=lawyer_generation_output.final_answer,
                     evaluation_result=None,
-                    confidences=None,
+                    confidences=lawyer_confidences[i],
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=T2-T1,
@@ -189,39 +188,43 @@ class Runner:
             )
 
 
-    # def _run_generation_and_confidence_stepbootstrap(self):
-    #     """
-    #     - generate stepbootstrap samples & confidences;
-    #     - outputs to the stepbootstrap dir (one file per sample)
-    #     """
-    #     # generate stepbootstrap samples & confidences
-    #     datapoint = self.context.datapoint
-    #     T0 = time.perf_counter()
-    #     stepbootstrap_generation_outputs: list[ParsedOutputGeneration] = self.stepbootstrap_sampling.generate()
-    #     T1 = time.perf_counter()
-    #     # stepbootstrap_confidences = [self.confidence_engine.compute_confidence(output) for output in stepbootstrap_generation_outputs]
-    #     T2 = time.perf_counter()
-    #     stepbootstrap_timings = {"generation_time": T1-T0, "confidence_time": T2-T1}
+    def _run_generation_and_confidence_stepbootstrap(self):
+        """
+        - generate stepbootstrap samples & confidences;
+        - outputs to the stepbootstrap dir (one file per sample)
+        """
+        # generate stepbootstrap samples & confidences
+        datapoint = self.context.datapoint
+        T0 = time.perf_counter()
+        stepbootstrap_generation_outputs: list[ParsedOutputGeneration] = self.stepbootstrap_sampling.generate()
+        T1 = time.perf_counter()
+        stepbootstrap_confidences = [self.confidence_engine.compute_confidence(output) for output in stepbootstrap_generation_outputs]
+        T2 = time.perf_counter()
 
-    #     # save stepbootstrap trajectories
-    #     for i, stepbootstrap_generation_output in enumerate(stepbootstrap_generation_outputs):
-    #         self.stepbootstrap_trajectory_repository.save(
-    #             trajectory_record=TrajectoryRecord(
-    #                 id=datapoint.id,
-    #                 question=datapoint.question,
-    #                 ground_truth=datapoint.ground_truth,
-    #                 prompt=stepbootstrap_generation_output.text_question,
-    #                 generated_text=stepbootstrap_generation_output.text_cot_with_answer,
-    #                 cot_steps=stepbootstrap_generation_output.cot_steps,
-    #                 final_answer=stepbootstrap_generation_output.final_answer,
-    #                 # NOTE correctness / evaluation not implemented yet
-    #                 correct=None,
-    #                 confidences=None,
-    #                 timings=None
-    #             ),
-    #             sample=i,
-    #         )
+        # save stepbootstrap trajectories
+        for i, stepbootstrap_generation_output in enumerate(stepbootstrap_generation_outputs):
+            record = TrajectoryRecord(
+                    id=datapoint.id,
+                    question=datapoint.question,
+                    ground_truth=datapoint.ground_truth,
+                    prompt=stepbootstrap_generation_output.text_question,
+                    generated_text=stepbootstrap_generation_output.text_cot_with_answer,
+                    cot_steps=stepbootstrap_generation_output.cot_steps,
+                    final_answer=stepbootstrap_generation_output.final_answer,
+                    evaluation_result=None,
+                    confidences=stepbootstrap_confidences[i],
+                    timings=Timings(
+                        generation_time=T1-T0,
+                        confidence_time=T2-T1,
+                    )
+                )
 
+            self.dataset.evaluate(record)
+
+            self.stepbootstrap_trajectory_repository.save(
+                trajectory_record=record,
+                sample=i,
+            )
 
 
     def run_generation_and_confidence(self, datapoint: Datapoint):
@@ -234,22 +237,11 @@ class Runner:
         # 2. rejection
         self._run_generation_and_confidence_rejection()
 
-        # # 3 - generate lawyer samples & confidences
-        # T0 = time.perf_counter()
-        # lawyer_generation_outputs: list[ParsedOutputGeneration] = self.lawyer_sampling.generate(datapoint=datapoint)
-        # T1 = time.perf_counter()
-        # lawyer_confidences = [self.confidence_engine.compute_confidence(output) for output in lawyer_generation_outputs]
-        # T2 = time.perf_counter()
-        # lawyer_timings = {"generation_time": T1-T0, "confidence_time": T2-T1}
+        # 3 - generate lawyer samples & confidences
+        self._run_generation_and_confidence_lawyer()
 
-        # # 4 - generate stepbootstrap samples & confidences
-        # T0 = time.perf_counter()
-        # stepbootstrap_generation_outputs: list[ParsedOutputGeneration] = self.stepbootstrap_sampling.generate(datapoint=datapoint)
-        # T1 = time.perf_counter()
-        # stepbootstrap_confidences = [self.confidence_engine.compute_confidence(output) for output in stepbootstrap_generation_outputs] 
-        # T2 = time.perf_counter()
-        # stepbootstrap_timings = {"generation_time": T1-T0, "confidence_time": T2-T1}
-
+        # 4 - generate stepbootstrap samples & confidences
+        self._run_generation_and_confidence_stepbootstrap()
 
 
         # clear the all datapoint-related fields in the context to avoid accidentally using them for the next datapoint

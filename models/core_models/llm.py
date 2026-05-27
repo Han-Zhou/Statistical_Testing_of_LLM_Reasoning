@@ -98,9 +98,18 @@ class LLM():
     
 
 
-    def forward(self, prompt: str, cache: Optional[Tuple] = None, output_hidden_states: bool = False) -> ModelOutput:
+    def forward(
+        self,
+        prompt: str,
+        cache: Optional[Tuple] = None,
+        return_llm_output: bool = False,
+        output_hidden_states: bool = False,
+    ) -> ModelOutput | LLMOutput:
         """
-        Used for confidence scoring
+        Single forward pass.
+        - return_llm_output=False: returns the raw ModelOutput (used for confidence scoring).
+        - return_llm_output=True: behaves like a generate with 0 new tokens, attaches
+          `sequences` and offset mappings, and returns LLMOutput (used by stepbootstrap sampling).
         """
         logger.info(f"Forward pass with model {self.model_name}")
 
@@ -120,45 +129,13 @@ class LLM():
             outputs = self.model(
                 input_ids=model_input_ids,
                 past_key_values=cache,
-                use_cache=cache is not None,
+                use_cache=return_llm_output or cache is not None,
                 output_hidden_states=output_hidden_states,
                 return_dict=True,
             )
 
-        return outputs
-
-
-    def forward_pass(
-        self,
-        prompt: str,
-        cache: Optional[Tuple] = None,
-    ) -> LLMOutput:
-        """
-        different than forward function:
-        - this is basically a generate with 0 tokens generated
-        - for usage by stepbootstrap sampling
-        """
-        logger.info(f"Forward pass with model {self.model_name}")
-
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        full_input_ids = inputs.input_ids
-
-        # When a cache is provided, only feed the delta tokens. model.__call__()
-        # (unlike model.generate()) does not slice input_ids against past_key_values,
-        # so passing the full prompt would double-count the cached prefix.
-        if cache is not None:
-            cache_len = cache.get_seq_length()
-            model_input_ids = full_input_ids[:, cache_len:]
-        else:
-            model_input_ids = full_input_ids
-
-        with torch.inference_mode():
-            outputs = self.model(
-                input_ids=model_input_ids,
-                past_key_values=cache,
-                use_cache=True,
-                return_dict=True,
-            )
+        if not return_llm_output:
+            return outputs
 
         # Attach the full input_ids as 'sequences' to mimic model.generate() API.
         # After this forward pass, the cache covers exactly full_input_ids.

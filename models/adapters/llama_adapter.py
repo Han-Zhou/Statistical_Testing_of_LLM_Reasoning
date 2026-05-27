@@ -59,48 +59,48 @@ class LlamaScorer(ModelScorer):
 
 
 
-    def forward_continuations(
-        self,
-        continuation_texts: list[str],
-        cache: KVCache,
-        last_prompt_token_id: int,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Batched forward pass over N candidate continuations conditioned on `cache`.
+    # def forward_continuations(
+    #     self,
+    #     continuation_texts: list[str],
+    #     cache: KVCache,
+    #     last_prompt_token_id: int,
+    # ) -> tuple[torch.Tensor, torch.Tensor]:
+    #     """
+    #     Batched forward pass over N candidate continuations conditioned on `cache`.
         
-        Returns:
-            logits:  [N, T_max, vocab_size] where logits[n, i] predicts the i-th
-                    candidate token of continuation n (i.e., aligned with the
-                    candidate tokens themselves, not shifted by one).
-            lengths: [N] true token length of each continuation (for masking padding).
-        """
-        tok = self.model.tokenizer
-        pad_id = tok.pad_token_id if tok.pad_token_id is not None else 0
+    #     Returns:
+    #         logits:  [N, T_max, vocab_size] where logits[n, i] predicts the i-th
+    #                 candidate token of continuation n (i.e., aligned with the
+    #                 candidate tokens themselves, not shifted by one).
+    #         lengths: [N] true token length of each continuation (for masking padding).
+    #     """
+    #     tok = self.model.tokenizer
+    #     pad_id = tok.pad_token_id if tok.pad_token_id is not None else 0
 
-        cand_ids = [tok(c, add_special_tokens=False).input_ids for c in continuation_texts]
-        lengths = torch.tensor([len(ids) for ids in cand_ids])
-        T_max = int(lengths.max().item())
-        N = len(cand_ids)
+    #     cand_ids = [tok(c, add_special_tokens=False).input_ids for c in continuation_texts]
+    #     lengths = torch.tensor([len(ids) for ids in cand_ids])
+    #     T_max = int(lengths.max().item())
+    #     N = len(cand_ids)
 
-        batched = torch.full((N, T_max + 1), pad_id, dtype=torch.long)
-        batched[:, 0] = last_prompt_token_id
-        for i, ids in enumerate(cand_ids):
-            batched[i, 1:1 + len(ids)] = torch.tensor(ids)
-        batched = batched.to(self.model.device)
+    #     batched = torch.full((N, T_max + 1), pad_id, dtype=torch.long)
+    #     batched[:, 0] = last_prompt_token_id
+    #     for i, ids in enumerate(cand_ids):
+    #         batched[i, 1:1 + len(ids)] = torch.tensor(ids)
+    #     batched = batched.to(self.model.device)
 
-        short_cache = self._slice_cache(cache, 0, -1)
-        batched_cache = self._replicate_cache(short_cache, N) if N > 1 else short_cache
+    #     short_cache = self._slice_cache(cache, 0, -1)
+    #     batched_cache = self._replicate_cache(short_cache, N) if N > 1 else short_cache
 
-        with torch.no_grad():
-            out = self.model.model(
-                input_ids=batched,
-                past_key_values=batched_cache,
-                use_cache=False,
-            )
-        # out.logits: [N, T_max+1, vocab]
-        # out.logits[:, :-1] aligns with the candidate token positions
-        # out.logits[:, -1]  is the next-token-after-continuation distribution
-        return out.logits.detach(), lengths
+    #     with torch.no_grad():
+    #         out = self.model.model(
+    #             input_ids=batched,
+    #             past_key_values=batched_cache,
+    #             use_cache=False,
+    #         )
+    #     # out.logits: [N, T_max+1, vocab]
+    #     # out.logits[:, :-1] aligns with the candidate token positions
+    #     # out.logits[:, -1]  is the next-token-after-continuation distribution
+    #     return out.logits.detach(), lengths
 
 
 

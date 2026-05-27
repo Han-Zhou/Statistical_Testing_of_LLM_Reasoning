@@ -14,4 +14,5 @@ python3 main.py \
     --prompt_type 2 \
     --nb_cot_samples 4 \
     --temperature 0.9 \
-    --tag test-525-vanilla
+    --tag test-526-stepbootstrap
+    # --tag test-526-vanilla

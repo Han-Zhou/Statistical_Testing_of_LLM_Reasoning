@@ -6,7 +6,7 @@ from typing import Any
 
 import torch
 
-from domain import ParsedOutputGeneration, ConfidenceScores
+from domain import ParsedOutputGeneration, ConfidenceScores, ScorerOutput
 from models.adapters import ModelScorer
 
     
@@ -22,9 +22,9 @@ class ConfidenceMethod(ABC):
         ...
 
     @abstractmethod
-    def extract(self, next_token_logits: torch.Tensor, tokenizer) -> Any:
+    def extract(self, scorer_output: ScorerOutput) -> dict[str, float]:
         """extract and process the logits we are interested in for this confidence method"""
-        ...
+        ...d
 
     @abstractmethod
     def compute_confidence(

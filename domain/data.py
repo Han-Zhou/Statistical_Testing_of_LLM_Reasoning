@@ -108,7 +108,6 @@ class PregeneratedTrajectoryRecord:
     prompt_cache_path: Path | None = None
 
 
-# NOTE finish this dataclass
 @dataclass
 class ParsedOutputGeneration:
     cot_steps: list[str]

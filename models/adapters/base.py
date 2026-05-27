@@ -70,15 +70,16 @@ class ModelAdapter(ABC):
         return self.process_generation_output(output)
 
     def forward_pass(
-            self, 
+            self,
             messages: list[dict[str, str]],
             cache: Optional[CacheBundle] = None,
         ) -> ParsedOutputGeneration:
         prompt_text = self.render_prompt(messages)
         cache = self.align_cache(cache, prompt_text)
-        output = self.model.forward_pass(
+        output = self.model.forward(
             prompt=prompt_text,
             cache=cache,
+            return_llm_output=True,
         )
         return self.process_generation_output(output)
 

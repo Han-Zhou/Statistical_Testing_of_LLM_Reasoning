@@ -86,13 +86,15 @@ class BigBenchMovieDataset(Dataset):
 
         if prompt_request.prompt_type == 1:
             # Type 1: assistant prefill with thinking tokens and 'Step 1:'
+            # Currently neither llama nor qwen support this prompt type (qwen does assistant prefill in the non-thinking phase)
             return [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
                 {"role": "assistant", "content": assistant},
             ]
-        else:
+        elif prompt_request.prompt_type == 2:
             # Type 2: 'Let's think step-by-step.' in user prompt, no assistant prefill.
+            # currently both llama and qwen support this prompt type
             user += "\nLet's think step-by-step."
             return [
                 {"role": "system", "content": system},

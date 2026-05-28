@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 
 from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteriaList, StopStringCriteria
 from transformers.utils import ModelOutput
+from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5DynamicCache
+from transformers.cache_utils import DynamicCache
 
 from domain.data import LLMOutput, KVCache, CacheBundle
 from models.core_models.registry import MODEL_HF_REGISTRY
@@ -45,8 +47,8 @@ class LLM():
             prompt: str, 
             max_tokens: int, 
             cache: Optional[Tuple], 
-            # stop_strings: list[str], 
-            temperature: float
+            temperature: float,
+            stop_strings: list[str] | None = None
         ) -> LLMOutput:
         # Generate text based on the prompt
         # prompt SHOULD ALREADY HAVE chat template applied
@@ -54,12 +56,12 @@ class LLM():
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
 
-        # if stop_strings:
-        #     stop_criteria = StoppingCriteriaList([
-        #         StopStringCriteria(tokenizer=self.tokenizer, stop_strings=stop_strings),
-        #     ])
-        # else:
-        stop_criteria = None
+        if stop_strings:
+            stop_criteria = StoppingCriteriaList([
+                StopStringCriteria(tokenizer=self.tokenizer, stop_strings=stop_strings),
+            ])
+        else:
+            stop_criteria = None
         with torch.inference_mode():
             if cache is not None:
                 outputs = self.model.generate(
@@ -153,14 +155,31 @@ class LLM():
 
 
     def align_cache(self, cache: Optional[CacheBundle], prompt_text: str) -> KVCache | None:
+        """
+        we return the subset of cache that is aligned with the prompt text
+        """
         if cache is None:
             return None
 
         new_input_ids = self.tokenizer(prompt_text, return_tensors="pt").input_ids[0]
         lcp = cache.longest_common_prefix(new_input_ids)
 
-        aligned_cache = copy.deepcopy(cache.cache)
-        aligned_cache.crop(lcp)
+        # here we need to take account of the cache type.
+        if isinstance(cache.cache, DynamicCache):
+            # cache used by llama: regular kv cache
+            # crop the cache to the lcp and return
+            aligned_cache = copy.deepcopy(cache.cache)
+            aligned_cache.crop(lcp)
+            return aligned_cache
+        elif isinstance(cache.cache, Qwen3_5DynamicCache):
+            # cache used by qwen: dynamic cache
+            # check if the whole cache is aligned with the prompt text
+            if lcp == cache.cache.get_seq_length():
+                return cache.cache
+            else:
+                # the cache is not aligned with the prompt text, we can't use any since qwen does not support cropping
+                return None
+        else:
+            raise ValueError(f"Unsupported cache type: {type(cache.cache)}")
 
-        return aligned_cache
 

@@ -3,7 +3,9 @@ from types import MappingProxyType
 
 
 MODEL_ATTENTION_IMPLEMENTATION_REGISTRY = MappingProxyType({
-    "llama": "sdpa"
+    # "llama": "sdpa"
+    "llama": "flash_attention_2",
+    "qwen": "flash_attention_2",
 })
 
 ANSWER_TOKENS = {

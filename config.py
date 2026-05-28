@@ -8,7 +8,6 @@ class GenerationConfig:
     model: str
     dataset: str
     backend: str
-    thinking: bool
     prompt_type: int
     max_tokens: int
     sample_size: int | None
@@ -24,7 +23,6 @@ class GenerationConfig:
             model=args.model,
             dataset=args.dataset,
             backend=args.backend,
-            thinking=args.thinking,
             prompt_type=args.prompt_type,
             max_tokens=args.max_tokens,
             sample_size=args.sample_size,

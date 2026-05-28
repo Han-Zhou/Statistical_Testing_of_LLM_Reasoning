@@ -1,7 +1,7 @@
 import re
 import copy
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from domain import LLMOutput, ParsedOutputGeneration, KVCache, CacheBundle, AnswerSpan, ScorerOutput
 
@@ -194,10 +194,6 @@ class LlamaAdapter(ModelAdapter):
 
 
 
-    def align_cache(self, cache: Optional[CacheBundle], prompt_text: str) -> KVCache | None:
-        return self.model.align_cache(cache, prompt_text)
-
-
     def render_prompt(self, messages: list[dict[str, str]]) -> str:
         """Converts messages dict to a prompt_text with proper chat template applied"""
         has_assistant_prefill = any(m.get("role") == "assistant" for m in messages)
@@ -275,7 +271,18 @@ class LlamaAdapter(ModelAdapter):
 
 
 
-
-
+    def generate_helper(
+        self,
+        prompt: str,
+        max_tokens: int,
+        cache: Optional[Tuple],
+        temperature: float
+    ) -> LLMOutput:
+        return self.model.generate(
+            prompt=prompt,
+            max_tokens=max_tokens,
+            cache=cache,
+            temperature=temperature
+        )
 
 

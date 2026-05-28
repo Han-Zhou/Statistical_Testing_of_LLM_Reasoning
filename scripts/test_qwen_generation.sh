@@ -1,0 +1,19 @@
+# NOTE
+# tests:
+# - generation
+# - vanilla confidence
+
+python3 main.py \
+    --backend hf \
+    --confidence none \
+    --dataset bigbench_movie \
+    --from_pickle /storage/backup/han/cot/pickles/bigbench_movie_250.pkl \
+    --max_tokens 512 \
+    --model qwen \
+    --sample_size 2 \
+    --prompt_type 2 \
+    --nb_cot_samples 4 \
+    --temperature 0.9 \
+    --tag test-528-qwen
+
+

@@ -115,19 +115,13 @@ def parse():
         help="Sampling temperature for generation. 0.0 = greedy decoding.",
     )
     args.add_argument(
-        "--thinking",
-        action="store_true",
-        default=False,
-        help="Whether to use thinking.",
-    )
-    args.add_argument(
         "--prompt_type",
         type=int,
         default=1,
         choices=[1, 2],
         help=(
             "Prompt type. "
-            "1 (default): assistant prefill with thinking tokens and 'Step 1:'. "
+            "1 (default): assistant prefill with 'Step 1:'. "
             "2: 'Let's think step-by-step.' in user prompt, no assistant prefill."
         ),
     )

@@ -2,7 +2,10 @@
 from abc import ABC, abstractmethod
 from typing import Literal, Protocol, Sequence, Optional, Tuple
 
+from transformers.utils import ModelOutput
+
 from models.core_models import LLM, API_LLM
+
 from domain import LLMOutput, ParsedOutputGeneration, CacheBundle, ScorerOutput, KVCache
 
 
@@ -42,7 +45,7 @@ class ModelAdapter(ABC):
 
 
     @abstractmethod
-    def render_prompt(self, messages: list[dict[str, str]]) -> str:
+    def render_prompt(self, messages: list[dict[str, str]]) -> str | list[dict[str, str]]:
         ...
     
     @abstractmethod
@@ -53,13 +56,23 @@ class ModelAdapter(ABC):
     @abstractmethod
     def generate_helper(
         self, 
-            prompt: str, 
+            prompt: str | list[dict[str, str]], 
             max_tokens: int, 
             cache: Optional[Tuple], 
             temperature: float
         ) -> LLMOutput:
         ...
     
+
+    @abstractmethod
+    def forward_pass_helper(
+        self,
+        prompt: str | list[dict[str, str]],
+        cache: Optional[CacheBundle] = None,
+        return_llm_output: bool = False,
+    ) -> LLMOutput | ModelOutput:
+        ...
+
     
     def generate(
         self, 
@@ -74,6 +87,7 @@ class ModelAdapter(ABC):
         return self.process_generation_output(output)
 
 
+
     def forward_pass(
         self,
         messages: list[dict[str, str]],
@@ -81,11 +95,7 @@ class ModelAdapter(ABC):
     ) -> ParsedOutputGeneration:
         prompt_text = self.render_prompt(messages)
         cache = self.align_cache(cache, prompt_text)
-        output = self.model.forward(
-            prompt=prompt_text,
-            cache=cache,
-            return_llm_output=True,
-        )
+        output = self.forward_pass_helper(prompt_text, cache, return_llm_output=True)
         return self.process_generation_output(output)
 
 

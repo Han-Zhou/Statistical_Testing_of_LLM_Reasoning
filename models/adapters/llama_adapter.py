@@ -3,6 +3,8 @@ import copy
 
 from typing import Optional, Tuple
 
+from transformers.utils import ModelOutput
+
 from domain import LLMOutput, ParsedOutputGeneration, KVCache, CacheBundle, AnswerSpan, ScorerOutput
 
 
@@ -176,10 +178,10 @@ class LlamaAdapter(ModelAdapter):
         return cot_steps, text_question, text_cot, text_cot_with_answer, whole_cache, question_cache
 
 
-    def _extract_answer_and_probs(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], all_probs: torch.Tensor, answer_span: AnswerSpan | None) -> tuple[str, torch.Tensor]:
+    def _extract_answer_and_probs(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], all_probs: torch.Tensor, all_score_probs: torch.Tensor | None, sequence_ids: torch.Tensor, answer_span: AnswerSpan | None) -> tuple[str, torch.Tensor, torch.Tensor, torch.Tensor | None]:
         if answer_span is None:
-            return "", torch.tensor([])
-    
+            return "", torch.tensor([]), torch.tensor([], dtype=torch.long), None
+
         final_answer = output_text[answer_span.char_answer_boxed_start:answer_span.char_answer_boxed_end].strip()
 
         # these token indices are absolute
@@ -189,8 +191,14 @@ class LlamaAdapter(ModelAdapter):
         # all_probs is relative to the start of generation, so we need to shift these token indices by the number of question tokens
         num_question_tokens = len(output_tokens) - all_probs.shape[0]
         answer_token_probs = all_probs[answer_start_token_idx - num_question_tokens:answer_end_token_idx - num_question_tokens]
+        if all_score_probs is None:
+            answer_token_score_probs = None
+        else:
+            num_score_question_tokens = len(output_tokens) - all_score_probs.shape[0]
+            answer_token_score_probs = all_score_probs[answer_start_token_idx - num_score_question_tokens:answer_end_token_idx - num_score_question_tokens]
+        answer_token_ids = sequence_ids[answer_start_token_idx:answer_end_token_idx].detach().cpu().long()
 
-        return final_answer, answer_token_probs
+        return final_answer, answer_token_probs, answer_token_ids, answer_token_score_probs
 
 
 
@@ -244,6 +252,12 @@ class LlamaAdapter(ModelAdapter):
             # because answer tokens always sit deep in the delta, not at its boundary.
             all_probs: torch.Tensor = F.softmax(outputs.logits[0, :-1, :], dim=-1)
 
+        output_scores = getattr(outputs, "scores", None)
+        if isinstance(output_scores, tuple):
+            all_score_probs: torch.Tensor | None = torch.stack([F.softmax(s, dim=-1).squeeze(0) for s in output_scores])
+        else:
+            all_score_probs = None
+
         output_text= self.model.tokenizer.decode(outputs.sequences[0], skip_special_tokens=False)
         output_tokens = self.model.tokenizer.convert_ids_to_tokens(outputs.sequences[0])
 
@@ -256,7 +270,7 @@ class LlamaAdapter(ModelAdapter):
         cot_steps, text_question, text_cot, text_cot_with_answer, whole_cache, question_cache = self._extract_cot(output_text, output_tokens, offset_mappings, outputs.past_key_values, outputs.sequences[0], cot_start_idx, answer_span)
 
         # answer_span needed to get final_answer and answer_token_probs
-        final_answer, answer_token_probs = self._extract_answer_and_probs(output_text, output_tokens, offset_mappings, all_probs, answer_span)
+        final_answer, answer_token_probs, answer_token_ids, answer_token_score_probs = self._extract_answer_and_probs(output_text, output_tokens, offset_mappings, all_probs, all_score_probs, outputs.sequences[0], answer_span)
 
         return ParsedOutputGeneration(
             cot_steps=cot_steps,
@@ -267,6 +281,8 @@ class LlamaAdapter(ModelAdapter):
             whole_cache=whole_cache,
             question_cache=question_cache,
             answer_token_probs=answer_token_probs,
+            answer_token_ids=answer_token_ids,
+            answer_token_score_probs=answer_token_score_probs,
         )
 
 
@@ -283,6 +299,19 @@ class LlamaAdapter(ModelAdapter):
             max_tokens=max_tokens,
             cache=cache,
             temperature=temperature
+        )
+
+    
+    def forward_pass_helper(
+        self,
+        prompt: str | list[dict[str, str]],
+        cache: Optional[CacheBundle] = None,
+        return_llm_output: bool = False,
+    ) -> LLMOutput | ModelOutput:
+        return self.model.forward(
+            prompt=prompt,
+            cache=cache,
+            return_llm_output=return_llm_output,
         )
 
 

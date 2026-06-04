@@ -13,5 +13,10 @@ ANSWER_TOKENS = {
     # ' No': [' No', ' no', ' NO', ' Nah', ' nah', ' Nope', ' nope'],
     ' True': [' True'],
     ' False': [' False'],
-    'llama_verbal_confidence': [str(i) for i in range(0, 101)]
+    'llama_verbal_confidence': [str(i) for i in range(0, 101)],
+    'gpt_verbal_confidence': [str(i) for i in range(0, 101)],
+    "gpt_True": ["True"],
+    "gpt_False": ["False"],
 }
+
+

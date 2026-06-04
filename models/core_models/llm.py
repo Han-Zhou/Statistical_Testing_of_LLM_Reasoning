@@ -74,6 +74,7 @@ class LLM():
                     temperature=temperature if temperature > 0.0 else None,
                     pad_token_id=self.tokenizer.eos_token_id,
                     output_logits=True,
+                    output_scores=True,
                     stopping_criteria=stop_criteria,
                 )
             else:
@@ -85,6 +86,7 @@ class LLM():
                     temperature=temperature if temperature > 0.0 else None,
                     pad_token_id=self.tokenizer.eos_token_id,
                     output_logits=True,
+                    output_scores=True,
                     stopping_criteria=stop_criteria,
                 )
 

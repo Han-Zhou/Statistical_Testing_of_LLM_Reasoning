@@ -9,7 +9,9 @@ from pipeline import Runner
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -27,48 +29,63 @@ def parse():
         type=str,
         default="none",
         choices=["none", "vanilla", "step_bootstrap"],
-        help="Whether or not to evaluate confidence on the COTs."
+        help="Whether or not to evaluate confidence on the COTs.",
     )
     args.add_argument(
         "--dataset",
         type=str,
         required=True,
-        choices=["bfcl", "bigbench_movie", "bigbench_causal", "logiqa", "codeqa", "cs1qa", "hotpotqa", "math500"],
+        choices=[
+            "bfcl",
+            "bigbench_movie",
+            "bigbench_causal",
+            "logiqa",
+            "codeqa",
+            "cs1qa",
+            "hotpotqa",
+            "math500",
+        ],
         help=(
             "Dataset to process. One of: bfcl, bigbench_movie, "
             "bigbench_causal, logiqa, codeqa, cs1qa, hotpotqa, math500."
-        )
+        ),
+    )
+    args.add_argument(
+        "--debug_top20",
+        action="store_true",
+        default=False,
+        help="Output also the top 20 token-probabilities for each answer token position.",
     )
     args.add_argument(
         "--discord",
         action="store_true",
         default=False,
-        help="Send tqdm progress to Discord via TQDM_DISCORD_TOKEN and TQDM_DISCORD_CHANNEL_ID env vars."
+        help="Send tqdm progress to Discord via TQDM_DISCORD_TOKEN and TQDM_DISCORD_CHANNEL_ID env vars.",
     )
     args.add_argument(
         "--from_pickle",
         type=str,
         default=None,
-        help="Path to a pickle file containing raw dataset entries (NOT pre-generated). --dataset is still required for prompt/eval routing."
+        help="Path to a pickle file containing raw dataset entries (NOT pre-generated). --dataset is still required for prompt/eval routing.",
     )
     args.add_argument(
         "--from_pregenerated",
         type=str,
         default=None,
-        help="Path to a pickle file containing pre-generated entries. --dataset is still required for prompt/eval routing."
+        help="Path to a pickle file containing pre-generated entries. --dataset is still required for prompt/eval routing.",
     )
     args.add_argument(
         "--max_tokens",
         type=int,
         required=True,
-        help="Maximum number of new tokens to generate for each prompt."
+        help="Maximum number of new tokens to generate for each prompt.",
     )
     args.add_argument(
         "--model",
         type=str,
         required=True,
-        choices=["llama", "qwen"],
-        help="The model to use for the statistical testing"
+        choices=["llama", "qwen", "gpt"],
+        help="The model to use for the statistical testing",
     )
     args.add_argument(
         "--nb_cot_samples",
@@ -77,10 +94,10 @@ def parse():
         help="Number of CoT samples per datapoint. Requires temperature > 0 for diversity.",
     )
     args.add_argument(
-        "--nb_dropout_samples",
+        "--nb_stepbootstrap_samples",
         type=int,
         default=None,
-        help="Number of dropout samples for confidence scoring. Defaults to 3. Must not be set with --vanilla_only."
+        help="Number of stepbootstrap samples for confidence scoring. Defaults to 3. Must not be set with --vanilla_only.",
     )
     args.add_argument(
         "--sample_range",
@@ -88,25 +105,25 @@ def parse():
         nargs=2,
         metavar=("START", "END"),
         default=None,
-        help="Slice [start, end) of the dataset to process. Mutually exclusive with --sample_size."
+        help="Slice [start, end) of the dataset to process. Mutually exclusive with --sample_size.",
     )
     args.add_argument(
         "--sample_size",
         type=int,
         default=None,
-        help="Number of samples to process from the dataset. Defaults to all."
+        help="Number of samples to process from the dataset. Defaults to all.",
     )
     args.add_argument(
         "--seed_stepbootstrap",
         type=int,
         default=0,
-        help="Seed for random number generation for StepBootstrap sampling. Defaults to 0."
+        help="Seed for random number generation for StepBootstrap sampling. Defaults to 0.",
     )
     args.add_argument(
         "--tag",
         type=str,
         default=None,
-        help="Optional prefix for the output directory name."
+        help="Optional prefix for the output directory name.",
     )
     args.add_argument(
         "--temperature",
@@ -129,32 +146,21 @@ def parse():
     return args
 
 
-
-
-
-
-
 def main():
     args = parse().parse_args()
-    confidence_config, generation_config, sampling_config = ConfidenceConfig.from_args(args), GenerationConfig.from_args(args), SamplingConfig.from_args(args)
+    confidence_config, generation_config, sampling_config = (
+        ConfidenceConfig.from_args(args),
+        GenerationConfig.from_args(args),
+        SamplingConfig.from_args(args),
+    )
     runner = Runner(
-        generation_config=generation_config, 
+        generation_config=generation_config,
         confidence_config=confidence_config,
-        sampling_config=sampling_config
+        sampling_config=sampling_config,
+        discord=args.discord,
     )
     runner.run()
-    
+
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-

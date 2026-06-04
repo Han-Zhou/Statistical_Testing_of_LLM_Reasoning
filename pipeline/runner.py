@@ -1,5 +1,10 @@
 
 import time
+import logging
+
+from dotenv import load_dotenv
+from tqdm import tqdm
+from tqdm.contrib.discord import tqdm as tqdm_discord
 
 from config import GenerationConfig, ConfidenceConfig, SamplingConfig
 from confidence import ConfidenceEngine
@@ -16,6 +21,11 @@ from repository import TrajectoryRepository
 from datasets import DATASETS, Dataset
 
 
+load_dotenv()
+
+
+logger = logging.getLogger(__name__)
+
 
 class Runner:
     def __init__(
@@ -23,11 +33,13 @@ class Runner:
         generation_config: GenerationConfig,
         confidence_config: ConfidenceConfig,
         sampling_config: SamplingConfig,
+        discord: bool = False,
     ):
         self.generation_config = generation_config
         self.confidence_config = confidence_config
         self.sampling_config = sampling_config
-
+        self.discord = discord
+        
         self.model_adapter = MODEL_ADAPTER_REGISTRY[self.generation_config.model]()
 
         self.confidence_engine: ConfidenceEngine = ConfidenceEngine(self.confidence_config, self.model_adapter.model_scorer)
@@ -252,10 +264,20 @@ class Runner:
         if self.generation_config.from_pickle is not None:
             datapoints: list[Datapoint] = self.dataset.load_datapoints_from_pickle(self.generation_config.from_pickle)
 
-            if self.generation_config.sample_size:
+            if self.generation_config.sample_size is not None:
                 datapoints = datapoints[:self.generation_config.sample_size]
-                for datapoint in datapoints:
+
+            progress = tqdm_discord if self.discord else tqdm
+            tag = self.generation_config.tag
+            desc = f"Generating [{tag}]" if tag else "Generating"
+            for datapoint in progress(datapoints, desc=desc, unit="sample", total=len(datapoints)):
+                try:
                     self.run_generation_and_confidence(datapoint)
+                except Exception as e:
+                    logger.exception(f"datapoint {datapoint.id} failed")
+                    self.vanilla_trajectory_repository.save_error(datapoint.id, e)
+                    self.context.clear()
+                    continue
         
         
 

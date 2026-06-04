@@ -41,7 +41,7 @@ class StepBootstrapSampling(SamplingMethod):
     def _alternative_cots_stepbootstrap(self) -> list[str]:
         rng = np.random.default_rng(self.sampling_config.seed_stepbootstrap)
         return [_rebuild_cot(_resample_steps(self.context.reference_vanilla_cot, rng)) 
-        for _ in range(self.sampling_config.nb_cot_samples)]
+        for _ in range(self.sampling_config.nb_stepbootstrap_samples)]
 
 
 
@@ -80,7 +80,7 @@ class StepBootstrapSampling(SamplingMethod):
         alternative_cots = self._alternative_cots_stepbootstrap()
 
         generation_outputs: list[ParsedOutputGeneration] = []
-        for i in range(self.sampling_config.nb_cot_samples):
+        for i in range(self.sampling_config.nb_stepbootstrap_samples):
             new_messages = self._add_assistant_message_to_messages(messages, alternative_cots[i])
             generate_output: ParsedOutputGeneration = self.context.model_adapter.forward_pass(
                 messages=new_messages,

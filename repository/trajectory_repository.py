@@ -4,6 +4,7 @@ Trajectory Repository is the bridge between the trajectory data and the rest of 
 
 import json
 import logging
+import traceback
 from dataclasses import asdict, fields, replace
 from pathlib import Path
 
@@ -74,6 +75,10 @@ class TrajectoryRepository:
         
         if file_path.exists():
             logger.warning(f"Trajectory file already exists and will be overwritten: {file_path}")
+
+        confidences = asdict(trajectory_record.confidences) if trajectory_record.confidences is not None else None
+        if confidences is not None and confidences.get("debug_answer_top20_probabilities") is None:
+            del confidences["debug_answer_top20_probabilities"]
         
         with open(file_path, "w") as f:
             json.dump({
@@ -86,7 +91,7 @@ class TrajectoryRepository:
                 "ground_truth": trajectory_record.ground_truth,
                 "evaluation_result": asdict(trajectory_record.evaluation_result) if trajectory_record.evaluation_result is not None else None,
                 # "prompt_cache_path": trajectory_record.prompt_cache_path,
-                "confidences": asdict(trajectory_record.confidences) if trajectory_record.confidences is not None else None,
+                "confidences": confidences,
                 "timings": asdict(trajectory_record.timings) if trajectory_record.timings is not None else None,
             }, f, indent=2)
         
@@ -108,5 +113,24 @@ class TrajectoryRepository:
         updated_record = replace(existing_record, **updates)
 
         self.save(updated_record, sample)
+
+
+    def save_error(self, datapoint_id, error: BaseException, sample: int | None = None):
+        id_parts = str(datapoint_id).split('_')
+        record_id = id_parts[-1] if id_parts[-1].isdigit() else datapoint_id
+
+        if sample is not None:
+            file_name = f"traj_{record_id}_sample_{sample}_error.json"
+        else:
+            file_name = f"traj_{record_id}_error.json"
+
+        file_path = self.trajectory_data_path / file_name
+        with open(file_path, "w") as f:
+            json.dump({
+                "id": datapoint_id,
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "traceback": traceback.format_exception(type(error), error, error.__traceback__),
+            }, f, indent=2)
         
 

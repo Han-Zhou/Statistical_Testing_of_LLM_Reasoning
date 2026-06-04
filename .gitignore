@@ -1,11 +1,13 @@
 # Directories
 __pycache__/
 .*/
+trajectories/
 
 # File groups
 temp_*
 
 # Specific files
+.env
 monitor.sh 
 CLAUDE.md
 

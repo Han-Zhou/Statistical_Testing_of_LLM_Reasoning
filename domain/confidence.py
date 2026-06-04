@@ -16,6 +16,14 @@ class ConfidenceScores:
     # verbconf_top_prob: float | None = None              # probability of that score
     step_masks: list[list[int]] | None = None           # binary list per sample: 1 = kept, 0 = masked
 
+    # debug_top20 info
+    debug_answer_top20_probabilities: list[dict[str, float]] | None = None
+
+    # experimental - stats for scores
+    answer_score_probabilities: list[dict[str, float]] | None = None
+    answer_score_entropy: list[dict[str, float]] | None = None
+
+
 
 @dataclass
 class ConfidenceDebugInfo:

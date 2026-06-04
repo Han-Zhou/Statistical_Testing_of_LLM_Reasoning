@@ -10,11 +10,10 @@ python3 main.py \
     --max_tokens 1024 \
     --model llama \
     --prompt_type 2 \
-    --sample_size 2 \
-    --nb_cot_samples 2 \
-    --nb_stepbootstrap_samples 2 \
+    --nb_cot_samples 32 \
+    --nb_stepbootstrap_samples 100 \
     --temperature 0.9 \
-    --tag test-llama-bm-604  \
+    --tag llama-bm-604  \
+    --discord \
     --debug_top20
-    # --discord
 

@@ -24,7 +24,7 @@ class ConfidenceMethod(ABC):
     @abstractmethod
     def extract(self, scorer_output: ScorerOutput) -> dict[str, float]:
         """extract and process the logits we are interested in for this confidence method"""
-        ...d
+        ...
 
     @abstractmethod
     def compute_confidence(

@@ -8,11 +8,11 @@ import torch
 from transformers.generation.utils import GenerateDecoderOnlyOutput
 from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5DynamicCache
 from transformers.cache_utils import DynamicCache
-
+from openai.types.chat.chat_completion import ChatCompletion
+from openai.types.chat.chat_completion_token_logprob import ChatCompletionTokenLogprob, TopLogprob
 
 from domain.confidence import ConfidenceScores
 from domain.evaluation import EvaluationResult
-
 
 
 KVCache: TypeAlias = DynamicCache | Qwen3_5DynamicCache
@@ -23,12 +23,15 @@ class CacheBundle:
     """
     A KV cache bundled with the input_ids it was computed from.
     """
+
     cache: KVCache
     input_ids: torch.Tensor
 
     def __post_init__(self):
         if self.input_ids.dim() != 1:
-            raise ValueError(f"input_ids must be 1D, got shape {tuple(self.input_ids.shape)}")
+            raise ValueError(
+                f"input_ids must be 1D, got shape {tuple(self.input_ids.shape)}"
+            )
         cache_len = self.cache.get_seq_length()
         if self.input_ids.shape[0] != cache_len:
             raise ValueError(
@@ -63,22 +66,22 @@ class Datapoint:
     metadata: dict[str, Any] = field(default_factory=lambda: defaultdict(list))
 
 
-
 @dataclass
 class PromptRequest:
     # few-shot not implemented yet
     few_shot: bool
     prompt_type: int
-    
-    
+
+
 @dataclass
 class Timings:
     """Timings for generation and confidence, used for each sampling method:
-        - vanilla
-        - rejection
-        - lawyer
-        - stepbootstrap
+    - vanilla
+    - rejection
+    - lawyer
+    - stepbootstrap
     """
+
     generation_time: float
     confidence_time: float
 
@@ -117,14 +120,17 @@ class ParsedOutputGeneration:
     text_cot_with_answer: str
     whole_cache: CacheBundle
     question_cache: CacheBundle
-    answer_token_probs: torch.Tensor
+    answer_token_probs: torch.Tensor | list[list[TopLogprob]]
+    answer_token_ids: torch.Tensor | list[str]
+
+    # experimental - stats for scores
+    answer_token_score_probs: torch.Tensor | None = None
+
 
 
 
 @dataclass
 class LLMOutput:
-    outputs: GenerateDecoderOnlyOutput
+    outputs: GenerateDecoderOnlyOutput | ChatCompletion
     offset_mappings: list[tuple[int, int]] | None
-
-
-
+    text_question: str | None = None

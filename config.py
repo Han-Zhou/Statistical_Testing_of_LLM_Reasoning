@@ -38,13 +38,15 @@ class GenerationConfig:
 @dataclass
 class ConfidenceConfig:
     confidence: str
-    nb_dropout_samples: int | None
-
+    nb_stepbootstrap_samples: int | None
+    debug_top20: bool
+    
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "ConfidenceConfig":
         return cls(
             confidence=args.confidence,
-            nb_dropout_samples=args.nb_dropout_samples,
+            nb_stepbootstrap_samples=args.nb_stepbootstrap_samples,
+            debug_top20=args.debug_top20,
         )
 
 
@@ -53,6 +55,7 @@ class ConfidenceConfig:
 class SamplingConfig:
     temperature: float
     nb_cot_samples: int
+    nb_stepbootstrap_samples: int
     seed_stepbootstrap: int
 
     @classmethod
@@ -60,6 +63,7 @@ class SamplingConfig:
         return cls(
             temperature=args.temperature,
             nb_cot_samples=args.nb_cot_samples,
+            nb_stepbootstrap_samples=args.nb_stepbootstrap_samples,
             seed_stepbootstrap=args.seed_stepbootstrap,
         )
 

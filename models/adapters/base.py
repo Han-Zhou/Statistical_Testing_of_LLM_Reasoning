@@ -40,6 +40,10 @@ class ModelAdapter(ABC):
         self.model_scorer: ModelScorer
 
     
+    def cost(self) -> float:
+        return 0.0
+
+    
     def align_cache(self, cache: Optional[CacheBundle], prompt_text: str) -> Optional[KVCache]:
          return self.model.align_cache(cache, prompt_text)
 

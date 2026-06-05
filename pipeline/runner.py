@@ -97,6 +97,8 @@ class Runner:
         self.context.reference_vanilla_cot = vanilla_generation_output.cot_steps
         self.context.reference_vanilla_final_answer = vanilla_generation_output.final_answer
         self.context.reference_vanilla_question_cache = vanilla_generation_output.question_cache
+        if self.generation_config.backend == "api":
+            self.context.reference_vanilla_answer_tokens_for_api = vanilla_generation_output.answer_token_ids
 
         record = TrajectoryRecord(
                     id=datapoint.id,
@@ -111,7 +113,9 @@ class Runner:
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=T2-T1,
-                    )
+                    ),
+                    input_messages=vanilla_generation_output.input_messages,
+                    cost=self.model_adapter.cost(),
                 )
         
         self.dataset.evaluate(record)
@@ -150,7 +154,9 @@ class Runner:
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=T2-T1,
-                    )
+                    ),
+                    input_messages=rejection_generation_output.input_messages,
+                    cost=self.model_adapter.cost(),
                 )
         
             self.dataset.evaluate(record)
@@ -189,7 +195,9 @@ class Runner:
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=T2-T1,
-                    )
+                    ),
+                    input_messages=lawyer_generation_output.input_messages,
+                    cost=self.model_adapter.cost(),
             )
             
             self.dataset.evaluate(record)
@@ -228,7 +236,9 @@ class Runner:
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=T2-T1,
-                    )
+                    ),
+                    input_messages=stepbootstrap_generation_output.input_messages,
+                    cost=self.model_adapter.cost(),
                 )
 
             self.dataset.evaluate(record)

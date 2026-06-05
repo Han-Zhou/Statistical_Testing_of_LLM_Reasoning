@@ -47,11 +47,17 @@ class StepBootstrapSampling(SamplingMethod):
 
     def _add_assistant_message_to_messages(self, messages: list[dict[str, str]], alternative_cot: str) -> list[dict[str, str]]:
         """
-        adds the alternative_cots and the answer to the messages
+        adds the alternative_cots to the messages
+        also:
+        - if hf backend, adds the answer to the messages
+        - if api backend, do NOT add the answer to the messages
         Does NOT mutatate the original messages
         """
         new_messages = [message.copy() for message in messages]
-        final_answer_sentence = f"\nTherefore the final answer is \\boxed{{{self.context.reference_vanilla_final_answer}}}."
+        if self.generation_config.backend == "hf":
+            final_answer_sentence = f"\nTherefore the final answer is \\boxed{{{self.context.reference_vanilla_final_answer}}}."
+        else:
+            final_answer_sentence = f"\nTherefore the final answer is \\boxed{{"
         if self.generation_config.prompt_type == 1:
             # we append to the end  - the assistant prefill is already there
             new_messages[-1]["content"] += f"\n{alternative_cot}{final_answer_sentence}"
@@ -82,10 +88,16 @@ class StepBootstrapSampling(SamplingMethod):
         generation_outputs: list[ParsedOutputGeneration] = []
         for i in range(self.sampling_config.nb_stepbootstrap_samples):
             new_messages = self._add_assistant_message_to_messages(messages, alternative_cots[i])
+
             generate_output: ParsedOutputGeneration = self.context.model_adapter.forward_pass(
                 messages=new_messages,
                 cache=self.context.reference_vanilla_question_cache,
             )
+
+            # if api backend, it is possible that the answer token ids are not the same as the reference answer token ids
+            # in this case, we need to extract the answer token ids from the generate output
+            if self.generation_config.backend == "api":
+                generate_output.answer_token_ids = self.context.reference_vanilla_answer_tokens_for_api
 
             generation_outputs.append(generate_output)
 

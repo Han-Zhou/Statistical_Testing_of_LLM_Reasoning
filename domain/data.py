@@ -99,7 +99,9 @@ class TrajectoryRecord:
     prompt_cache_path: Path | None = None
     confidences: ConfidenceScores | None = None
     timings: Timings | None = None
-
+    input_messages: list[dict[str, str]] | None = None
+    cost: float = 0.0
+    
 
 @dataclass
 class PregeneratedTrajectoryRecord:
@@ -126,6 +128,9 @@ class ParsedOutputGeneration:
     # experimental - stats for scores
     answer_token_score_probs: torch.Tensor | None = None
 
+    # API path only: original chat-completions messages used to produce this output
+    input_messages: list[dict[str, str]] | None = None
+
 
 
 
@@ -134,3 +139,4 @@ class LLMOutput:
     outputs: GenerateDecoderOnlyOutput | ChatCompletion
     offset_mappings: list[tuple[int, int]] | None
     text_question: str | None = None
+    input_messages: list[dict[str, str]] | None = None

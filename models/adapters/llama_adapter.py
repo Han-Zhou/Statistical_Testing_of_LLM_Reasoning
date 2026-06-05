@@ -178,7 +178,16 @@ class LlamaAdapter(ModelAdapter):
         return cot_steps, text_question, text_cot, text_cot_with_answer, whole_cache, question_cache
 
 
-    def _extract_answer_and_probs(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], all_probs: torch.Tensor, all_score_probs: torch.Tensor | None, sequence_ids: torch.Tensor, answer_span: AnswerSpan | None) -> tuple[str, torch.Tensor, torch.Tensor, torch.Tensor | None]:
+    def _extract_answer_and_probs(
+        self, 
+        output_text: str, 
+        output_tokens: list[str], 
+        offset_mappings: list[tuple[int, int]], 
+        all_probs: torch.Tensor, 
+        all_score_probs: torch.Tensor | None, 
+        sequence_ids: torch.Tensor, 
+        answer_span: AnswerSpan | None
+    ) -> tuple[str, torch.Tensor, torch.Tensor, torch.Tensor | None]:
         if answer_span is None:
             return "", torch.tensor([]), torch.tensor([], dtype=torch.long), None
 

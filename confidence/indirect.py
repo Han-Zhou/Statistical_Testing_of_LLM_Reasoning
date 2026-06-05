@@ -24,7 +24,13 @@ class IndirectConfidenceMethod(ConfidenceMethod):
         self,
         parsed_output: ParsedOutputGeneration,
     ) -> dict[str, float]:
-        prompt = parsed_output.text_question + parsed_output.text_cot + self.tail_prompt(parsed_output.final_answer)
+        tail = self.tail_prompt(parsed_output.final_answer)
+        if parsed_output.input_messages is not None:
+            prompt = parsed_output.input_messages + [
+                {"role": "assistant", "content": parsed_output.text_cot + tail}
+            ]
+        else:
+            prompt = parsed_output.text_question + parsed_output.text_cot + tail
         scorer_output = self.model_scorer.forward_indirect(prompt, parsed_output.whole_cache)
         return self.extract(scorer_output)
 

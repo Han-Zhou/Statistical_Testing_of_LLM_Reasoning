@@ -20,9 +20,9 @@ def parse():
     args.add_argument(
         "--backend",
         type=str,
-        choices=["hf", "vllm"],
+        choices=["hf", "api"],
         required=True,
-        help="Backend for model inference. vLLM is faster but incompatible with --confidence.",
+        help="Backend for model inference. Hugginface or API (only openAI for now)",
     )
     args.add_argument(
         "--confidence",
@@ -146,8 +146,21 @@ def parse():
     return args
 
 
+def check_args(args: argparse.Namespace):
+    """
+    Checks for logical inconsistencies in the arguments.
+    """
+    if args.model == "gpt" and args.backend != "api":
+        raise ValueError("GPT model only supports API backend")
+    if (args.model == "llama" or args.model == "qwen") and args.backend != "hf":
+        raise ValueError("Llama or Qwen model only supports Hugginface backend")
+
+
+
+
 def main():
     args = parse().parse_args()
+    check_args(args)
     confidence_config, generation_config, sampling_config = (
         ConfidenceConfig.from_args(args),
         GenerationConfig.from_args(args),

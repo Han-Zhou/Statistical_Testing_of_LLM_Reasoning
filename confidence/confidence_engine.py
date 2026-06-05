@@ -93,8 +93,12 @@ class ConfidenceEngine:
         top_logprobs_per_pos: list[list[TopLogprob]] = parsed_output.answer_token_probs
         sampled_tokens: list[str] = parsed_output.answer_token_ids
 
+
+
+
         answer_probabilities: list[dict[str, float]] = []
         answer_entropy: list[dict[str, float]] = []
+        answer_top20_probabilities: list[dict[str, float]] | None = [] if self.confidence_config.debug_top20 else None
 
         for token_str, top_logprobs in zip(sampled_tokens, top_logprobs_per_pos):
             scores = {lp.token: lp.logprob for lp in top_logprobs}
@@ -109,6 +113,9 @@ class ConfidenceEngine:
             answer_probabilities.append({token_str: sampled_prob})
             answer_entropy.append({token_str: entropy})
 
+            if self.confidence_config.debug_top20:
+                answer_top20_probabilities.append({tok: math.exp(lp) for tok, lp in scores.items()})
+
         # API models don't populate answer_token_score_probs.
         answer_score_probs: list[dict[str, float]] = []
         answer_score_entropy: list[dict[str, float]] = []
@@ -122,6 +129,7 @@ class ConfidenceEngine:
             verbconf_probabilities=verbal_scores,
             answer_score_probabilities=answer_score_probs,
             answer_score_entropy=answer_score_entropy,
+            debug_answer_top20_probabilities=answer_top20_probabilities,
         )
 
 

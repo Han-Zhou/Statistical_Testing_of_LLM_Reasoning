@@ -13,6 +13,7 @@ class SampleContext:
     reference_vanilla_cot: list[str] | None = None
     reference_vanilla_final_answer: str | None = None
     reference_vanilla_question_cache: CacheBundle | None = None
+    reference_vanilla_answer_tokens_for_api: list[str] | None = None
 
     def clear(self):
         for field_name in list(self.__dataclass_fields__):

@@ -47,7 +47,17 @@ def _char_to_token_idx(self, char_idx: int, offset_mappings: list[tuple[int, int
         for token_idx, (start, end) in enumerate(offset_mappings):
             if start <= char_idx < end:
                 return token_idx
-        raise ValueError(f"Character index {char_idx} not found in any token span")
+
+        # Exclusive end-of-text bound: char_idx points one char past the last
+        # real character (e.g. an answer that runs to the very end of the
+        # generation). Return one-past-the-last-content-token so the result
+        # still works as a Python slice end. We can't use len(offset_mappings)
+        text_end = max((end for _, end in offset_mappings), default=0)
+        if char_idx == text_end:
+            last_content = max(i for i, (_, e) in enumerate(offset_mappings) if e == text_end)
+            return last_content + 1
+
+        raise ValueError(f"Character index {char_idx} not found in any token span") 
 
 
 

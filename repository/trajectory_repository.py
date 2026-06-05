@@ -18,6 +18,7 @@ class TrajectoryRepository:
         self.trajectory_data_path = Path(trajectory_data_path) if isinstance(trajectory_data_path, str) else trajectory_data_path
         self.trajectory_data_path.mkdir(parents=True, exist_ok=True)
 
+    # TODO: update loading logic
     def load(self, index: int, sample: int | None = None) -> TrajectoryRecord:
         if sample is not None:
             file_name = f"traj_{index}_sample_{sample}.json"
@@ -57,6 +58,7 @@ class TrajectoryRepository:
             # NOTE: confidence + confidence_timing loading slightly hacky
             confidences=confidences,
             timings=timings,
+            input_messages=data.get("input_messages", None),
         )
 
 
@@ -76,9 +78,6 @@ class TrajectoryRepository:
         if file_path.exists():
             logger.warning(f"Trajectory file already exists and will be overwritten: {file_path}")
 
-        confidences = asdict(trajectory_record.confidences) if trajectory_record.confidences is not None else None
-        if confidences is not None and confidences.get("debug_answer_top20_probabilities") is None:
-            del confidences["debug_answer_top20_probabilities"]
         
         with open(file_path, "w") as f:
             json.dump({
@@ -91,8 +90,10 @@ class TrajectoryRepository:
                 "ground_truth": trajectory_record.ground_truth,
                 "evaluation_result": asdict(trajectory_record.evaluation_result) if trajectory_record.evaluation_result is not None else None,
                 # "prompt_cache_path": trajectory_record.prompt_cache_path,
-                "confidences": confidences,
+                "confidences": asdict(trajectory_record.confidences) if trajectory_record.confidences is not None else None,
                 "timings": asdict(trajectory_record.timings) if trajectory_record.timings is not None else None,
+                "input_messages": trajectory_record.input_messages,
+                "cost (cumulative)": trajectory_record.cost,
             }, f, indent=2)
         
 

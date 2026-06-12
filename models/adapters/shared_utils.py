@@ -9,11 +9,17 @@ def _locate_answer_span(self, output_text: str, search_start: int = 0) -> Answer
         # search_start scopes the search past the prompt — the system prompt
         # itself contains the literal "\boxed{your answer}", which would
         # otherwise be matched as the model's final answer.
-        m = re.compile(r'\\boxed\{').search(output_text, search_start)
-        if m is None:
-            return None
+        
+        # m = re.compile(r'\\boxed\{').search(output_text, search_start)
+        # if m is None:
+        #     return None
 
-        content_start = m.end()          # char after the opening '{'
+        m = output_text.rfind('\\boxed{', search_start)
+        if m == -1:
+            return None
+        
+        content_start = m + len('\\boxed{')  # char after the opening '\boxed{'
+        # content_start = m.end()          # char after the opening '{'
         depth = 1
         i = content_start
         while i < len(output_text) and depth > 0:
@@ -28,12 +34,15 @@ def _locate_answer_span(self, output_text: str, search_start: int = 0) -> Answer
         content_end = i - 1              # index of the closing '}'
 
         sentence_start = max(
-            output_text.rfind('. ', search_start, m.start()),
-            output_text.rfind('\n', search_start, m.start()),
+            output_text.rfind('. ', search_start, m),
+            output_text.rfind('\n', search_start, m),
+            # output_text.rfind('. ', search_start, m.start()),
+            # output_text.rfind('\n', search_start, m.start()),
         ) + 1
         if sentence_start < search_start:
             sentence_start = search_start
-        while sentence_start < m.start() and output_text[sentence_start] == ' ':
+        while sentence_start < m and output_text[sentence_start] == ' ':
+        # while sentence_start < m.start() and output_text[sentence_start] == ' ':
             sentence_start += 1
 
         return AnswerSpan(

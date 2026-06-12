@@ -20,6 +20,23 @@ import torch
 
 
 
+LLAMA_STOP_STRINGS = [
+    "\nAnswer:",
+    "\nFinal Answer",
+    "\nFinal answer",
+    "\nThe final answer",
+    "\nThe answer",
+    "\nTherefore the answer",
+    "\nTherefore the final answer",
+]
+# Extend stop strings with "\n\n{letter}\n" and "\n\n({letter})\n" for each letter in LETTERS
+LETTERS = "ABCD"
+LLAMA_STOP_STRINGS.extend(f"\n\n{letter}\n" for letter in LETTERS)
+LLAMA_STOP_STRINGS.extend(f"\n\n({letter})\n" for letter in LETTERS)
+
+
+
+
 class LlamaScorer(ModelScorer):
     def __init__(self, model: LLM):
         self.model = model
@@ -115,6 +132,18 @@ class LlamaAdapter(ModelAdapter):
         self.model_scorer = LlamaScorer(self.model)
 
 
+    def _strip_trailing_special_token(self, text: str, cache: KVCache) -> tuple[str, KVCache]:
+        for special_tok in self.model.tokenizer.all_special_tokens:
+            if text.endswith(special_tok):
+                special_token_ids = self.model.tokenizer(
+                    special_tok,
+                    add_special_tokens=False,
+                ).input_ids
+                cache.crop(cache.get_seq_length() - len(special_token_ids))
+                return text[:-len(special_tok)], cache
+        return text, cache
+
+
 
     def _slice_cache(self, cache: KVCache, start: int, end: int) -> KVCache:
         sliced = copy.deepcopy(cache)
@@ -156,8 +185,9 @@ class LlamaAdapter(ModelAdapter):
         else:
             by_blank = [s.strip() for s in re.split(r"\n{2,}", text_cot) if s.strip()]
             if len(by_blank) > 1:
-                return by_blank
-            cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
+                cot_steps = by_blank
+            else:
+                cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
 
 
         # Split the cache at the assistant-header boundary. CacheBundle.cropped_to
@@ -199,12 +229,18 @@ class LlamaAdapter(ModelAdapter):
 
         # all_probs is relative to the start of generation, so we need to shift these token indices by the number of question tokens
         num_question_tokens = len(output_tokens) - all_probs.shape[0]
-        answer_token_probs = all_probs[answer_start_token_idx - num_question_tokens:answer_end_token_idx - num_question_tokens]
+        answer_token_probs = all_probs[
+            answer_start_token_idx - num_question_tokens
+            :answer_end_token_idx - num_question_tokens
+        ]
         if all_score_probs is None:
             answer_token_score_probs = None
         else:
             num_score_question_tokens = len(output_tokens) - all_score_probs.shape[0]
-            answer_token_score_probs = all_score_probs[answer_start_token_idx - num_score_question_tokens:answer_end_token_idx - num_score_question_tokens]
+            answer_token_score_probs = all_score_probs[
+                answer_start_token_idx - num_score_question_tokens
+                :answer_end_token_idx - num_score_question_tokens
+            ]
         answer_token_ids = sequence_ids[answer_start_token_idx:answer_end_token_idx].detach().cpu().long()
 
         return final_answer, answer_token_probs, answer_token_ids, answer_token_score_probs
@@ -303,14 +339,42 @@ class LlamaAdapter(ModelAdapter):
         cache: Optional[Tuple],
         temperature: float
     ) -> LLMOutput:
-        return self.model.generate(
+        """
+        2-phase generation; 
+        1. generate the cot part, with stop strings LLAMA_STOP_STRINGS
+        2. generate the answer part, with "The answer is \\boxed{"
+        """
+        # phase 1
+        phase_1_outputs: LLMOutput = self.model.generate(
             prompt=prompt,
             max_tokens=max_tokens,
             cache=cache,
+            temperature=temperature,
+            stop_strings=LLAMA_STOP_STRINGS
+        )
+
+        # phase 2
+        phase_1_outputs_raw = phase_1_outputs.outputs
+        phase_1_outputs_text = self.model.tokenizer.decode(
+            phase_1_outputs_raw.sequences[0],
+            skip_special_tokens=False,
+        )
+        phase_1_outputs_text, phase_2_cache = self._strip_trailing_special_token(
+            phase_1_outputs_text,
+            phase_1_outputs_raw.past_key_values,
+        )
+        phase_2_prompt = phase_1_outputs_text + "\nThe answer is \\boxed{"
+        phase_2_outputs: LLMOutput = self.model.generate(
+            prompt=phase_2_prompt,
+            max_tokens=200,
+            cache=phase_2_cache,
             temperature=temperature
         )
 
+        return phase_2_outputs
     
+
+
     def forward_pass_helper(
         self,
         prompt: str | list[dict[str, str]],

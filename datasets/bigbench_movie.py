@@ -16,11 +16,12 @@ SYSTEM_PROMPT = (
     "You are an expert reasoning assistant. "
     "For every problem you receive, think carefully and reason step-by-step. "
     "Label each reasoning step as 'Step 1:', 'Step 2:', etc. "
-    "After all steps, write your final answer on a new line in "
-    "\\boxed{your answer} format. You must double-escape all LaTeX backslashes. For example, output \\boxed instead of \boxed."
-    "Keep your reasoning concise, and be brief in each step."
-    "When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text."
+    "Keep your reasoning concise, and be brief in each step.\n\n"
+    "When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text.\n\n"
+    "During your reasoning, do NOT reveal, hint at, or restate the final answer. Do not write lines like 'Answer:', 'Final answer:', any answer strings, or any concluding sentence. Stop immediately after your last numbered reasoning step."
 )
+
+
 
 USER_PROMPT_TEMPLATE = """\
 {question}

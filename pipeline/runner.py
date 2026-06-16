@@ -62,22 +62,15 @@ class Runner:
         )
 
 
-        # Repository
-        ss = self.generation_config.sample_size if self.generation_config.sample_size is not None else None
-        sr = f"{self.generation_config.sample_range[0]}_{self.generation_config.sample_range[1]}" if self.generation_config.sample_range is not None else None
-        # samples is either ss or sr but not both. If both are None, sample_range is "full".
-        if ss is not None:
-            samples = ss
-        elif sr is not None:
-            samples = sr
-        else:
-            samples = "full"
+        # Repository — created in run(), once the sample range is resolved against the dataset size.
+
+
+    def _init_repositories(self, samples: str | int):
         base_dir_name = f"trajectories/{self.generation_config.tag}_{self.generation_config.model}_{self.generation_config.dataset}_s{samples}"
         self.vanilla_trajectory_repository = TrajectoryRepository(f"{base_dir_name}/vanilla")
         self.rejection_trajectory_repository = TrajectoryRepository(f"{base_dir_name}/rejection")
         self.lawyer_trajectory_repository = TrajectoryRepository(f"{base_dir_name}/lawyer")
         self.stepbootstrap_trajectory_repository = TrajectoryRepository(f"{base_dir_name}/stepbootstrap")
-
 
     def _run_generation_and_confidence_vanilla(self):
         """
@@ -90,7 +83,7 @@ class Runner:
         T0 = time.perf_counter()
         vanilla_generation_output: ParsedOutputGeneration = self.vanilla_sampling.generate()
         T1 = time.perf_counter()
-        vanilla_confidence = self.confidence_engine.compute_confidence(vanilla_generation_output)
+        vanilla_confidence, vanilla_confidence_time = self.confidence_engine.compute_confidence(vanilla_generation_output)
         T2 = time.perf_counter()
 
         # update context
@@ -112,7 +105,7 @@ class Runner:
                     confidences=vanilla_confidence,
                     timings=Timings(
                         generation_time=T1-T0,
-                        confidence_time=T2-T1,
+                        confidence_time=vanilla_confidence_time,
                     ),
                     input_messages=vanilla_generation_output.input_messages,
                     cost=self.model_adapter.cost(),
@@ -136,7 +129,12 @@ class Runner:
         T0 = time.perf_counter()
         rejection_generation_outputs: list[ParsedOutputGeneration] = self.rejection_sampling.generate()
         T1 = time.perf_counter()
-        rejection_confidences = [self.confidence_engine.compute_confidence(output) for output in rejection_generation_outputs]
+        rejection_confidences = []
+        rejection_confidence_times = []
+        for output in rejection_generation_outputs:
+            confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+            rejection_confidences.append(confidence)
+            rejection_confidence_times.append(confidence_time)
         T2 = time.perf_counter()
 
         # save rejection trajectories
@@ -153,7 +151,7 @@ class Runner:
                     confidences=rejection_confidences[i],
                     timings=Timings(
                         generation_time=T1-T0,
-                        confidence_time=T2-T1,
+                        confidence_time=rejection_confidence_times[i],
                     ),
                     input_messages=rejection_generation_output.input_messages,
                     cost=self.model_adapter.cost(),
@@ -177,7 +175,12 @@ class Runner:
         T0 = time.perf_counter()
         lawyer_generation_outputs: list[ParsedOutputGeneration] = self.lawyer_sampling.generate()
         T1 = time.perf_counter()
-        lawyer_confidences = [self.confidence_engine.compute_confidence(output) for output in lawyer_generation_outputs]
+        lawyer_confidences = []
+        lawyer_confidence_times = []
+        for output in lawyer_generation_outputs:
+            confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+            lawyer_confidences.append(confidence)
+            lawyer_confidence_times.append(confidence_time)
         T2 = time.perf_counter()
 
         # save lawyer trajectories
@@ -194,7 +197,7 @@ class Runner:
                     confidences=lawyer_confidences[i],
                     timings=Timings(
                         generation_time=T1-T0,
-                        confidence_time=T2-T1,
+                        confidence_time=lawyer_confidence_times[i],
                     ),
                     input_messages=lawyer_generation_output.input_messages,
                     cost=self.model_adapter.cost(),
@@ -218,7 +221,12 @@ class Runner:
         T0 = time.perf_counter()
         stepbootstrap_generation_outputs: list[ParsedOutputGeneration] = self.stepbootstrap_sampling.generate()
         T1 = time.perf_counter()
-        stepbootstrap_confidences = [self.confidence_engine.compute_confidence(output) for output in stepbootstrap_generation_outputs]
+        stepbootstrap_confidences = []
+        stepbootstrap_confidence_times = []
+        for output in stepbootstrap_generation_outputs:
+            confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+            stepbootstrap_confidences.append(confidence)
+            stepbootstrap_confidence_times.append(confidence_time)
         T2 = time.perf_counter()
 
         # save stepbootstrap trajectories
@@ -235,7 +243,7 @@ class Runner:
                     confidences=stepbootstrap_confidences[i],
                     timings=Timings(
                         generation_time=T1-T0,
-                        confidence_time=T2-T1,
+                        confidence_time=stepbootstrap_confidence_times[i],
                     ),
                     input_messages=stepbootstrap_generation_output.input_messages,
                     cost=self.model_adapter.cost(),
@@ -255,7 +263,6 @@ class Runner:
         # 1. vanilla
         self._run_generation_and_confidence_vanilla()
 
-
         # 2. rejection
         self._run_generation_and_confidence_rejection()
 
@@ -273,21 +280,35 @@ class Runner:
     def run(self):
         if self.generation_config.from_pickle is not None:
             datapoints: list[Datapoint] = self.dataset.load_datapoints_from_pickle(self.generation_config.from_pickle)
+        else:
+            datapoints: list[Datapoint] = self.dataset.load_datapoints()
 
-            if self.generation_config.sample_size is not None:
-                datapoints = datapoints[:self.generation_config.sample_size]
+        # sample_range and sample_size are mutually exclusive; sample_range wins if both are set.
+        if self.generation_config.sample_range is not None:
+            start, end = self.generation_config.sample_range
+            start = max(0, start)
+            end = min(len(datapoints), end)
+            datapoints = datapoints[start:end]
+            samples = f"{start}_{end}"
+        elif self.generation_config.sample_size is not None:
+            datapoints = datapoints[:self.generation_config.sample_size]
+            samples = self.generation_config.sample_size
+        else:
+            samples = "full"
 
-            progress = tqdm_discord if self.discord else tqdm
-            tag = self.generation_config.tag
-            desc = f"Generating [{tag}]" if tag else "Generating"
-            for datapoint in progress(datapoints, desc=desc, unit="sample", total=len(datapoints)):
-                try:
-                    self.run_generation_and_confidence(datapoint)
-                except Exception as e:
-                    logger.exception(f"datapoint {datapoint.id} failed")
-                    self.vanilla_trajectory_repository.save_error(datapoint.id, e)
-                    self.context.clear()
-                    continue
+        self._init_repositories(samples)
+
+        progress = tqdm_discord if self.discord else tqdm
+        tag = self.generation_config.tag
+        desc = f"Generating [{tag}]" if tag else "Generating"
+        for datapoint in progress(datapoints, desc=desc, unit="sample", total=len(datapoints)):
+            try:
+                self.run_generation_and_confidence(datapoint)
+            except Exception as e:
+                logger.exception(f"datapoint {datapoint.id} failed")
+                self.vanilla_trajectory_repository.save_error(datapoint.id, e)
+                self.context.clear()
+                continue
         
         
 

@@ -6,16 +6,28 @@ from typing import Any, TypeAlias
 
 import torch
 from transformers.generation.utils import GenerateDecoderOnlyOutput
-from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5DynamicCache
 from transformers.cache_utils import DynamicCache
+try:
+    from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5DynamicCache
+except ImportError:
+    # transformers >=5.5.1 dropped Qwen3_5DynamicCache; the qwen3_5 module now
+    # uses the generic DynamicCache. The cot_vllm env (transformers 5.10.2) hits
+    # this path; the cot env (transformers 5.3.0) still has the dedicated class.
+    Qwen3_5DynamicCache = DynamicCache
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.chat.chat_completion_token_logprob import ChatCompletionTokenLogprob, TopLogprob
+from vllm import RequestOutput
+
+from .confidence import ConfidenceTime
+
 
 from domain.confidence import ConfidenceScores
 from domain.evaluation import EvaluationResult
 
 
 KVCache: TypeAlias = DynamicCache | Qwen3_5DynamicCache
+
+ListAnswerTokenProbs: TypeAlias = list[dict[int, float]]
 
 
 @dataclass(frozen=True)
@@ -83,7 +95,7 @@ class Timings:
     """
 
     generation_time: float
-    confidence_time: float
+    confidence_time: ConfidenceTime
 
 
 @dataclass
@@ -136,7 +148,10 @@ class ParsedOutputGeneration:
 
 @dataclass
 class LLMOutput:
-    outputs: GenerateDecoderOnlyOutput | ChatCompletion
+    outputs: GenerateDecoderOnlyOutput | ChatCompletion | RequestOutput
     offset_mappings: list[tuple[int, int]] | None
     text_question: str | None = None
     input_messages: list[dict[str, str]] | None = None
+
+
+

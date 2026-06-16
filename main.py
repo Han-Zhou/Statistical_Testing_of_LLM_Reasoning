@@ -20,7 +20,7 @@ def parse():
     args.add_argument(
         "--backend",
         type=str,
-        choices=["hf", "api"],
+        choices=["hf", "api", "vllm"],
         required=True,
         help="Backend for model inference. Hugginface or API (only openAI for now)",
     )
@@ -30,6 +30,12 @@ def parse():
         default="none",
         choices=["none", "vanilla", "step_bootstrap"],
         help="Whether or not to evaluate confidence on the COTs.",
+    )
+    args.add_argument(
+        "--experimental_cuda_sync_for_timing",
+        action="store_true",
+        default=False,
+        help="Experimental: use CUDA stream synchronization for timing.",
     )
     args.add_argument(
         "--dataset",
@@ -84,7 +90,7 @@ def parse():
         "--model",
         type=str,
         required=True,
-        choices=["llama", "qwen", "gpt"],
+        choices=["llama", "qwen", "qwen_vllm", "gpt"],
         help="The model to use for the statistical testing",
     )
     args.add_argument(

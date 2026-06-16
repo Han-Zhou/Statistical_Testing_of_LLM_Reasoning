@@ -40,6 +40,7 @@ class ConfidenceConfig:
     confidence: str
     nb_stepbootstrap_samples: int | None
     debug_top20: bool
+    cuda_sync_for_timing: bool
     
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "ConfidenceConfig":
@@ -47,6 +48,7 @@ class ConfidenceConfig:
             confidence=args.confidence,
             nb_stepbootstrap_samples=args.nb_stepbootstrap_samples,
             debug_top20=args.debug_top20,
+            cuda_sync_for_timing=args.experimental_cuda_sync_for_timing,
         )
 
 

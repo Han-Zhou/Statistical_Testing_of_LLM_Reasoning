@@ -3,6 +3,16 @@ from dataclasses import dataclass
 import torch
 
 
+@dataclass
+class ConfidenceTime:
+    answer_prob_time: float
+    answer_ent_time: float
+    indirect_time: float
+    verbconf_time: float
+    # experimental - stats for scores
+    answer_score_prob_time: float | None = None
+    answer_score_ent_time: float | None = None
+
 
 @dataclass
 class ConfidenceScores:

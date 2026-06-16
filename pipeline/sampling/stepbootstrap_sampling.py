@@ -86,6 +86,9 @@ class StepBootstrapSampling(SamplingMethod):
         alternative_cots = self._alternative_cots_stepbootstrap()
 
         generation_outputs: list[ParsedOutputGeneration] = []
+
+        # NOTE possible optimization for vllm backend 
+
         for i in range(self.sampling_config.nb_stepbootstrap_samples):
             new_messages = self._add_assistant_message_to_messages(messages, alternative_cots[i])
 

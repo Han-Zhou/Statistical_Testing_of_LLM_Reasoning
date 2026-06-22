@@ -1,5 +1,6 @@
 import re
 import copy
+import time
 
 from typing import Optional, Tuple
 
@@ -41,40 +42,81 @@ class LlamaScorer(ModelScorer):
     def __init__(self, model: LLM):
         self.model = model
 
-    def forward_indirect(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
+    def forward_indirect(self, prompt: str, whole_cache: CacheBundle) -> tuple[ScorerOutput, dict[str, float]]:
         """
         forward_indirect runs a forward pass on the prompt with indirect suffix, and returns the logitsfor the indirect tokens. These are 'True' and 'False' tokens generated last
         """
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
         cache = self.model.align_cache(whole_cache, prompt)
-
+        torch.cuda.synchronize()
+        t1 = time.perf_counter()
         outputs = self.model.forward(prompt, cache=cache)
         last_logits = outputs.logits[0, -1, :]
-
+        torch.cuda.synchronize()
+        t2 = time.perf_counter()
         tok = self.model.tokenizer
         true_id = tok(ANSWER_TOKENS[' True'][0], add_special_tokens=False).input_ids[0]
         false_id = tok(ANSWER_TOKENS[' False'][0], add_special_tokens=False).input_ids[0]
+        t3 = time.perf_counter()
 
-        return {
-            'True': last_logits[true_id].detach().cpu(),
-            'False': last_logits[false_id].detach().cpu(),
+        # de-tokenize the aligned cache so we can see what prefix got reused.
+        # `cache` is the LCP-cropped KVCache; its length is the number of reused
+        # tokens, which are exactly the first N ids of whole_cache.input_ids.
+        reused_num_tokens = 0 if cache is None else cache.get_seq_length()
+        reused_tokens_text = tok.decode(
+            whole_cache.input_ids[:reused_num_tokens], skip_special_tokens=False
+        )
+
+        debug_info = {
+            "align_cache_time": t1 - t0,
+            "forward_time": t2 - t1,
+            "tokenizer_time": t3 - t2,
+            "reused_num_tokens": reused_num_tokens,
+            "reused_tokens_text": reused_tokens_text,
         }
 
+        return ({
+            'True': last_logits[true_id].detach().cpu(),
+            'False': last_logits[false_id].detach().cpu(),
+        }, debug_info)
 
-    def forward_verbal(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
+
+    def forward_verbal(self, prompt: str, whole_cache: CacheBundle) -> tuple[ScorerOutput, dict[str, float]]:
         """
         forward_verbal runs a forward pass on the prompt with verbal suffix, and returns the logits for the verbal tokens. These are the tokens generated last.
         For llama, we are lucky such that every integer [0, 100] has its own token, so we only need one forward pass
         """
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
         cache = self.model.align_cache(whole_cache, prompt)
+        torch.cuda.synchronize()
+        t1 = time.perf_counter()
 
         outputs = self.model.forward(prompt, cache=cache)
         last_logits = outputs.logits[0, -1, :]
-
+        torch.cuda.synchronize()
+        t2 = time.perf_counter()
         tok = self.model.tokenizer
-        return {
+
+        # de-tokenize the aligned cache so we can see what prefix got reused.
+        # `cache` is the LCP-cropped KVCache; its length is the number of reused
+        # tokens, which are exactly the first N ids of whole_cache.input_ids.
+        reused_num_tokens = 0 if cache is None else cache.get_seq_length()
+        reused_tokens_text = tok.decode(
+            whole_cache.input_ids[:reused_num_tokens], skip_special_tokens=False
+        )
+
+        debug_info = {
+            "align_cache_time": t1 - t0,
+            "forward_time": t2 - t1,
+            "reused_num_tokens": reused_num_tokens,
+            "reused_tokens_text": reused_tokens_text,
+        }
+        return ({
             s: last_logits[tok(s, add_special_tokens=False).input_ids[0]].detach().cpu()
             for s in ANSWER_TOKENS['llama_verbal_confidence']
-        }
+        }, debug_info)
 
 
 
@@ -126,9 +168,9 @@ class LlamaScorer(ModelScorer):
 
 
 class LlamaAdapter(ModelAdapter):
-    def __init__(self):
+    def __init__(self, debug_nocache: bool = False):
         attention_implementation = MODEL_ATTENTION_IMPLEMENTATION_REGISTRY.get("llama")
-        self.model = LLM(model_name="llama", attention_implementation=attention_implementation)
+        self.model = LLM(model_name="llama", attention_implementation=attention_implementation, debug_nocache=debug_nocache)
         self.model_scorer = LlamaScorer(self.model)
 
 
@@ -359,6 +401,7 @@ class LlamaAdapter(ModelAdapter):
             phase_1_outputs_raw.sequences[0],
             skip_special_tokens=False,
         )
+
         phase_1_outputs_text, phase_2_cache = self._strip_trailing_special_token(
             phase_1_outputs_text,
             phase_1_outputs_raw.past_key_values,
@@ -370,6 +413,8 @@ class LlamaAdapter(ModelAdapter):
             cache=phase_2_cache,
             temperature=temperature
         )
+
+        # breakpoint()
 
         return phase_2_outputs
     

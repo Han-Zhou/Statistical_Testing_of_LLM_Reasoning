@@ -96,6 +96,7 @@ class Timings:
 
     generation_time: float
     confidence_time: ConfidenceTime
+    total_confidence_time: float
 
 
 @dataclass

@@ -16,6 +16,7 @@ class GenerationConfig:
     from_pregenerated: str | None
     discord: bool
     tag: str | None
+    debug_nocache: bool
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "GenerationConfig":
@@ -31,6 +32,7 @@ class GenerationConfig:
             from_pregenerated=args.from_pregenerated,
             discord=args.discord if args.discord else False,
             tag=args.tag,
+            debug_nocache=args.debug_nocache,
         )
 
 

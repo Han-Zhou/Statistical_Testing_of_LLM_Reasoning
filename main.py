@@ -63,6 +63,12 @@ def parse():
         help="Output also the top 20 token-probabilities for each answer token position.",
     )
     args.add_argument(
+        "--debug_nocache",
+        action="store_true",
+        default=False,
+        help="Disable KV-cache reuse: align_cache returns None for every call.",
+    )
+    args.add_argument(
         "--discord",
         action="store_true",
         default=False,

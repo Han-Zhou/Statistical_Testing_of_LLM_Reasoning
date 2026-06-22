@@ -4,7 +4,7 @@ from typing import Literal, Protocol, Sequence, Optional, Tuple
 
 from transformers.utils import ModelOutput
 
-from models.core_models import LLM, API_LLM
+from models.core_models import LLM, API_LLM, VLLM_LLM
 
 from domain import LLMOutput, ParsedOutputGeneration, CacheBundle, ScorerOutput, KVCache
 
@@ -16,8 +16,8 @@ Mode = Literal["generation", "confidence"]
 ModelScorer handles the confidence scoring - Indirect and Verbal
 """
 class ModelScorer(ABC):
-    def __init__(self, model: LLM | API_LLM):
-        self.model: LLM | API_LLM = model
+    def __init__(self, model: LLM | API_LLM | VLLM_LLM):
+        self.model: LLM | API_LLM | VLLM_LLM = model
 
     @abstractmethod
     def forward_indirect(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
@@ -36,7 +36,7 @@ ModelAdapter is the adapter between the runner and the core LLM / API_LLM.
 """
 class ModelAdapter(ABC):
     def __init__(self):
-        self.model: LLM | API_LLM
+        self.model: LLM | API_LLM | VLLM_LLM
         self.model_scorer: ModelScorer
 
     
@@ -84,7 +84,7 @@ class ModelAdapter(ABC):
         max_tokens: int, 
         cache: Optional[CacheBundle] = None,
         temperature: float = 0.0
-    ) -> ParsedOutputGeneration:
+    ) -> ParsedOutputGeneration | list[ParsedOutputGeneration]:
         prompt_text = self.render_prompt(messages)
         cache = self.align_cache(cache, prompt_text)
         output = self.generate_helper(prompt_text, max_tokens, cache, temperature)
@@ -96,7 +96,7 @@ class ModelAdapter(ABC):
         self,
         messages: list[dict[str, str]],
         cache: Optional[CacheBundle] = None,
-    ) -> ParsedOutputGeneration:
+    ) -> ParsedOutputGeneration | list[ParsedOutputGeneration]:
         prompt_text = self.render_prompt(messages)
         cache = self.align_cache(cache, prompt_text)
         output = self.forward_pass_helper(prompt_text, cache, return_llm_output=True)

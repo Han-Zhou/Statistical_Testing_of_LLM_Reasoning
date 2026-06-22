@@ -10,4 +10,4 @@ temp_*
 .env
 monitor.sh 
 CLAUDE.md
-
+AGENTS.md

@@ -1,12 +1,14 @@
 #!/bin/bash
+# Interactive srun for the stepbootstrap confidence cache-equivalence test.
+# Runs temp_test_sb_conf.py on one GPU; output streams to this terminal.
 
 srun \
-    --job-name=debug_llama \
+    --job-name=debug_sb_conf \
     --qos=high \
     --partition=compute \
     --nodes=1 \
     --gres=gpu:1 \
-    --time=18:00:00 \
+    --time=1:00:00 \
     --mem=128G \
     --cpus-per-task=24 \
     bash -c "
@@ -14,13 +16,5 @@ srun \
         module load cuda/12.4
         module load conda
         conda activate cot
-        scripts/test_llama_generation.sh
+        python3 temp_test_sb_conf.py
     "
-
-
-    # --nodelist=lux-2-node-18 \
-
-    # --exclude=lux-2-node-25 \
-
-    # --gres=gpu:0 \
-

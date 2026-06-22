@@ -14,8 +14,9 @@ python3 main.py \
     --nb_cot_samples 2 \
     --nb_stepbootstrap_samples 100 \
     --temperature 0.9 \
-    --tag test-llama-bm-622-cache  \
-    --debug_top20
+    --tag test-llama-bm-619-nocache  \
+    --debug_top20 \
+    --debug_nocache
     # --discord
 
 # python3 main.py \

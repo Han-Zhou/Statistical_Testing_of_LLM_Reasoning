@@ -2,7 +2,7 @@ import re
 import copy
 import logging
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from openai.types.chat.chat_completion import ChatCompletion, Choice, ChoiceLogprobs
 from openai.types.chat.chat_completion_token_logprob import ChatCompletionTokenLogprob, TopLogprob
@@ -29,7 +29,7 @@ class GptScorer(ModelScorer):
     def __init__(self, model: API_LLM):
         self.model = model
 
-    def forward_indirect(self, prompt: list[dict[str, str]], whole_cache: CacheBundle) -> ScorerOutput:
+    def forward_indirect(self, prompt: list[dict[str, str]], whole_cache: CacheBundle) -> tuple[ScorerOutput, dict[str, Any]]:
         """
         forward_indirect runs a forward pass on the prompt with indirect suffix, and returns the logits for the indirect tokens. These are 'True' and 'False' tokens generated last
         For GPT, whole_cache is not used.
@@ -37,15 +37,20 @@ class GptScorer(ModelScorer):
         llm_outputs: LLMOutput = self.model.forward(prompt)
         completion: ChatCompletion = llm_outputs.outputs
         first_token = completion.choices[0].logprobs.content[0]
-        top_logprobs: TopLogprob = first_token.top_logprobs
+        top_logprobs: list[TopLogprob] = first_token.top_logprobs
         scores = {lp.token: lp.logprob for lp in top_logprobs}
 
-        return {
+        scorer_output: ScorerOutput = {
             "True": torch.tensor(scores.get(ANSWER_TOKENS['gpt_True'][0], float("-inf"))),
             "False": torch.tensor(scores.get(ANSWER_TOKENS['gpt_False'][0], float("-inf"))),
         }
+        debug_info = {
+            "first_token": first_token.token,
+            "top_logprobs": {lp.token: lp.logprob for lp in top_logprobs},
+        }
+        return scorer_output, debug_info
 
-    def forward_verbal(self, prompt: list[dict[str, str]], whole_cache: CacheBundle) -> ScorerOutput:
+    def forward_verbal(self, prompt: list[dict[str, str]], whole_cache: CacheBundle) -> tuple[ScorerOutput, dict[str, Any]]:
         """
         forward_verbal runs a forward pass on the prompt with verbal suffix, and returns the logits for the verbal tokens. These are the tokens generated last.
         For llama, we are lucky such that every integer [0, 100] has its own token, so we only need one forward pass
@@ -54,13 +59,18 @@ class GptScorer(ModelScorer):
         llm_outputs: LLMOutput = self.model.forward(prompt)
         completion: ChatCompletion = llm_outputs.outputs
         first_token = completion.choices[0].logprobs.content[0]
-        top_logprobs: TopLogprob = first_token.top_logprobs
+        top_logprobs: list[TopLogprob] = first_token.top_logprobs
         scores = {lp.token: lp.logprob for lp in top_logprobs}
 
-        return {
+        scorer_output: ScorerOutput = {
             s: torch.tensor(scores.get(s, float("-inf")))
             for s in ANSWER_TOKENS['gpt_verbal_confidence']
         }
+        debug_info = {
+            "first_token": first_token.token,
+            "top_logprobs": {lp.token: lp.logprob for lp in top_logprobs},
+        }
+        return scorer_output, debug_info
 
 
 
@@ -114,9 +124,9 @@ class GptAdapter(ModelAdapter):
         output_text: str, 
         output_tokens: list[str], 
         offset_mappings: list[tuple[int, int]], 
-        all_probs: list[TopLogprob], 
+        all_probs: list[list[TopLogprob]], 
         answer_span: AnswerSpan | None
-    ) -> tuple[str, list[TopLogprob], list[str]]:
+    ) -> tuple[str, list[list[TopLogprob]], list[str]]:
         if answer_span is None:
             return "", [], []
 
@@ -170,7 +180,7 @@ class GptAdapter(ModelAdapter):
 
         output_tokens: list[str] = []
         all_logprobs: list[float] = [] # stores the logprobs for all tokens generated
-        all_top_logprobs: list[TopLogprob] = [] # stores the top logprobs for all tokens generated
+        all_top_logprobs: list[list[TopLogprob]] = [] # stores the top logprobs for all tokens generated
         for token_logprob in content:
             output_tokens.append(token_logprob.token)
             all_logprobs.append(token_logprob.logprob)
@@ -228,10 +238,98 @@ class GptAdapter(ModelAdapter):
         cache: Optional[Tuple],
         temperature: float
     ) -> LLMOutput:
-        return self.model.generate(
+        """
+        2-phase generation, mirroring LlamaAdapter:
+          phase 1: generate the CoT.
+          phase 2: prefill '...The answer is \\boxed{' as an assistant turn and
+                   continue it, so the boxed answer's tokens carry real logprobs.
+
+        The chat API returns only the *newly generated* tokens per call, so we merge
+        phase-1 text + the injected prefix + phase-2 tokens back into a single
+        completion. process_generation_output then locates the \\boxed{} span and
+        slices the answer-token logprobs exactly as in the single-phase path.
+        """
+        # phase 1 — CoT
+        phase_1: LLMOutput = self.model.generate(
             prompt_messages=prompt,
             max_tokens=max_tokens,
-            temperature=temperature
+            temperature=temperature,
+        )
+        phase_1_text = phase_1.outputs.choices[0].message.content or ""
+        phase_1_cot = self._strip_trailing_bare_answer(phase_1_text)
+
+        # phase 2 — box. Continue the assistant turn that ends in '\boxed{'.
+        # Stop at '}' so the model emits only the answer (cheaper, no rambling);
+        # the closing brace is re-attached synthetically in the merge.
+        prefix = "\nThe answer is \\boxed{"
+        phase_2_messages = list(prompt) + [
+            {"role": "assistant", "content": phase_1_cot + prefix}
+        ]
+        phase_2: LLMOutput = self.model.generate(
+            prompt_messages=phase_2_messages,
+            max_tokens=16,            # only need the boxed answer
+            temperature=temperature,
+            stop=["}"],
+            continue_final_message=True,
+        )
+
+        return self._merge_two_phase(prompt, phase_1_cot, prefix, phase_2)
+
+
+    _BARE_ANSWER_RE = re.compile(r"\s*\n+\s*\(?[A-Fa-f]\)?\s*$")
+
+    def _strip_trailing_bare_answer(self, text: str) -> str:
+        """
+        The bigbench_movie system prompt instructs the model to end with a bare MCQ
+        letter (e.g. '\\n\\nA'). Strip it so the CoT doesn't carry a stray answer that
+        could mismatch the phase-2 boxed answer.
+        """
+        return self._BARE_ANSWER_RE.sub("", text).rstrip()
+
+
+    def _merge_two_phase(
+        self,
+        original_prompt: list[dict[str, str]],
+        phase_1_cot: str,
+        prefix: str,
+        phase_2: LLMOutput,
+    ) -> LLMOutput:
+        """
+        Fold phase-1 CoT + prefix into the phase-2 completion as a single leading
+        synthetic token, and re-attach the closing '}' as a trailing synthetic
+        token, so the visible text is 'CoT...\\boxed{ANSWER}' and the answer tokens
+        keep their real top_logprobs. Both synthetic tokens are delimiters: the
+        answer span lies strictly between them, so their (absent) logprobs are
+        never read.
+        """
+        blob = phase_1_cot + prefix
+        completion: ChatCompletion = phase_2.outputs
+        choice: Choice = completion.choices[0]
+
+        answer_text = choice.message.content or ""
+        # phase 2 stops at '}' (excluded by the API), so re-attach a synthetic
+        # closing brace as a trailing token. It's a delimiter only: the answer
+        # span is end-exclusive of the brace, so its fake logprob is never read.
+        # This guarantees _locate_answer_span finds matched braces even when the
+        # model never emitted one.
+        choice.message.content = blob + answer_text + "}"
+        synthetic_prefix = ChatCompletionTokenLogprob(
+            token=blob, bytes=None, logprob=0.0, top_logprobs=[]
+        )
+        synthetic_brace = ChatCompletionTokenLogprob(
+            token="}", bytes=None, logprob=0.0, top_logprobs=[]
+        )
+        choice.logprobs.content = (
+            [synthetic_prefix] + (choice.logprobs.content or []) + [synthetic_brace]
+        )
+
+        # input_messages must stay the system+user prompt (no assistant turn): the
+        # confidence methods append their own assistant tail to it downstream.
+        return LLMOutput(
+            outputs=completion,
+            offset_mappings=None,
+            text_question=self.model._render_messages(original_prompt),
+            input_messages=original_prompt,
         )
 
 

@@ -40,7 +40,11 @@ class Runner:
         self.sampling_config = sampling_config
         self.discord = discord
         
-        self.model_adapter = MODEL_ADAPTER_REGISTRY[self.generation_config.model]()
+        adapter_cls = MODEL_ADAPTER_REGISTRY[self.generation_config.model]
+        if self.generation_config.model == "llama":
+            self.model_adapter = adapter_cls(debug_nocache=self.generation_config.debug_nocache)
+        else:
+            self.model_adapter = adapter_cls()
 
         self.confidence_engine: ConfidenceEngine = ConfidenceEngine(self.confidence_config, self.model_adapter.model_scorer)
 
@@ -106,11 +110,15 @@ class Runner:
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=vanilla_confidence_time,
+                        total_confidence_time=T2-T1,
                     ),
                     input_messages=vanilla_generation_output.input_messages,
                     cost=self.model_adapter.cost(),
                 )
         
+
+        # breakpoint()
+
         self.dataset.evaluate(record)
         
         # save vanilla trajectory
@@ -152,6 +160,7 @@ class Runner:
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=rejection_confidence_times[i],
+                        total_confidence_time=T2-T1,
                     ),
                     input_messages=rejection_generation_output.input_messages,
                     cost=self.model_adapter.cost(),
@@ -198,6 +207,7 @@ class Runner:
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=lawyer_confidence_times[i],
+                        total_confidence_time=T2-T1,
                     ),
                     input_messages=lawyer_generation_output.input_messages,
                     cost=self.model_adapter.cost(),
@@ -244,6 +254,7 @@ class Runner:
                     timings=Timings(
                         generation_time=T1-T0,
                         confidence_time=stepbootstrap_confidence_times[i],
+                        total_confidence_time=T2-T1,
                     ),
                     input_messages=stepbootstrap_generation_output.input_messages,
                     cost=self.model_adapter.cost(),

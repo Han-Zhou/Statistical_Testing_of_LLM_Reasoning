@@ -17,6 +17,22 @@ import torch.nn.functional as F
 import torch
 
 
+QWEN_STOP_STRINGS = [
+    "\nAnswer:",
+    "\nFinal Answer",
+    "\nFinal answer",
+    "\nThe final answer",
+    "\nThe answer",
+    "\nTherefore the answer",
+    "\nTherefore the final answer",
+]
+# Extend stop strings with "\n\n{letter}\n" and "\n\n({letter})\n" for each letter in LETTERS
+LETTERS = "ABCD"
+QWEN_STOP_STRINGS.extend(f"\n\n{letter}\n" for letter in LETTERS)
+QWEN_STOP_STRINGS.extend(f"\n\n({letter})\n" for letter in LETTERS)
+
+
+
 
 
 class QwenScorer(ModelScorer):
@@ -70,7 +86,14 @@ class QwenAdapter(ModelAdapter):
         self.model = LLM(model_name="qwen", attention_implementation=attention_implementation)
         self.model_scorer = QwenScorer(self.model)
 
-
+    def _strip_trailing_special_token(self, text: str) -> tuple[str, bool]:
+        """
+        Because we can't crop the cache, we jsut return a bool to see if the text ends with a special token
+        """
+        for special_tok in self.model.tokenizer.all_special_tokens:
+            if text.endswith(special_tok):
+                return text[:-len(special_tok)], True
+        return text, False
 
     def _extract_cot(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], cache: KVCache, sequence_ids: torch.Tensor, cot_start_idx: int, answer_span: AnswerSpan | None) -> tuple[list[str], str, str, str, KVCache, CacheBundle]:
         # text_cot_with_answer contains basically everything after the "assistant" header
@@ -98,8 +121,9 @@ class QwenAdapter(ModelAdapter):
         else:
             by_blank = [s.strip() for s in re.split(r"\n{2,}", text_cot) if s.strip()]
             if len(by_blank) > 1:
-                return by_blank
-            cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
+                cot_steps = by_blank
+            else:
+                cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
 
 
         # to get the question cache, we need to run a forward pass on the question part of the prompt
@@ -109,8 +133,8 @@ class QwenAdapter(ModelAdapter):
             return_llm_output=True,
         )
         question_cache = CacheBundle(
-            cache=question_outputs.outputs.past_key_values[0],
-            input_ids=question_outputs.outputs.input_ids[0],
+            cache=question_outputs.outputs.past_key_values,
+            input_ids=question_outputs.outputs.sequences[0].detach().cpu().clone(),
         )
         whole_cache = CacheBundle(
             cache=copy.deepcopy(cache),
@@ -120,7 +144,16 @@ class QwenAdapter(ModelAdapter):
         return cot_steps, text_question, text_cot, text_cot_with_answer, whole_cache, question_cache
 
 
-    def _extract_answer_and_probs(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], all_probs: torch.Tensor, all_score_probs: torch.Tensor | None, sequence_ids: torch.Tensor, answer_span: AnswerSpan | None) -> tuple[str, torch.Tensor, torch.Tensor, torch.Tensor | None]:
+    def _extract_answer_and_probs(
+        self, 
+        output_text: str, 
+        output_tokens: list[str], 
+        offset_mappings: list[tuple[int, int]], 
+        all_probs: torch.Tensor, 
+        all_score_probs: torch.Tensor | None, 
+        sequence_ids: torch.Tensor, 
+        answer_span: AnswerSpan | None
+    ) -> tuple[str, torch.Tensor, torch.Tensor, torch.Tensor | None]:
         if answer_span is None:
             return "", torch.tensor([]), torch.tensor([], dtype=torch.long), None
 
@@ -239,9 +272,10 @@ class QwenAdapter(ModelAdapter):
         temperature: float
     ) -> LLMOutput:
         """
-        2 phase generation
+        3 phase generation
         - 1) generate the thinking part, with "</think>" as the stop string
-        - 2) generate the answer part, with post-thinking prefill "let's think step by step. Step 1: "
+        - 2) generate the cot part, with post-thinking prefill "let's think step by step. Step 1: "
+        - 3) generate the answer part, with "The answer is \boxed{"
         """
 
         # phase 1
@@ -259,15 +293,57 @@ class QwenAdapter(ModelAdapter):
         phase_1_outputs_text = self.model.tokenizer.decode(phase_1_generated_tokens, skip_special_tokens=False)
 
         # 2) generate the answer part, with assistant prefill "let's think step by step. Step 1: "
-        phase_2_prompt = phase_1_outputs_text + "Let's think step by step. Step 1: "
+        # here we don't need to strip the special token coz it's guaranteed to end at </think>
+        phase_2_prompt = phase_1_outputs_text + "Let's think step by step. \nStep 1: "
         phase_2_outputs: LLMOutput = self.model.generate(
             prompt=phase_2_prompt,
             max_tokens=max_tokens,
+            temperature=temperature,
+            stop_strings=QWEN_STOP_STRINGS,
             cache=phase_1_outputs_raw.past_key_values,
-            temperature=temperature
         )
 
-        return phase_2_outputs
+        # Decoding phase 2 outputs to get generated text from token IDs
+        phase_2_outputs_raw = phase_2_outputs.outputs
+        phase_2_generated_tokens = phase_2_outputs_raw.sequences[0]
+        phase_2_outputs_text = self.model.tokenizer.decode(phase_2_generated_tokens, skip_special_tokens=False)
+
+        phase_2_outputs_text, has_special_token = self._strip_trailing_special_token(phase_2_outputs_text)
+
+        # 3) generate the answer part, with "The answer is \boxed{"
+        phase_3_prompt = phase_2_outputs_text + "\nThe answer is \\boxed{"
+        phase_3_outputs: LLMOutput = self.model.generate(
+            prompt=phase_3_prompt,
+            max_tokens=200,
+            temperature=temperature,
+            cache=phase_2_outputs_raw.past_key_values if has_special_token else None,
+        )
+
+        # crop out the thinking part
+        phase_3_outputs_raw = phase_3_outputs.outputs
+        phase_3_generated_tokens = phase_3_outputs_raw.sequences[0]
+        phase_3_outputs_text = self.model.tokenizer.decode(phase_3_generated_tokens, skip_special_tokens=False)
+        phase_3_outputs_text = re.sub(
+            r"<think>.*?</think>",
+            "",
+            phase_3_outputs_text,
+            flags=re.DOTALL,
+        ).strip()
+        # re-encode the generated phase 3 output to get offset mappings
+        # phase_3_generated_tokens = self.model.tokenizer(
+        #     phase_3_outputs_text,
+        #     return_tensors='pt',
+        #     add_special_tokens=False,
+        # )["input_ids"][0]
+        # offset_mappings = self.model.tokenizer(
+        #     phase_3_outputs_text,
+        #     return_offsets_mapping=True,
+        #     add_special_tokens=False,
+        # )["offset_mapping"]
+        # phase_3_outputs.offset_mappings = offset_mappings
+
+        # forward pass the cropped phase 3 output to get the offset mappings
+        return self.model.forward(prompt=phase_3_outputs_text, return_llm_output=True)
 
 
 

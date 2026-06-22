@@ -30,6 +30,5 @@ class ConfidenceMethod(ABC):
     def compute_confidence(
         self,
         parsed_output: ParsedOutputGeneration,
-    ) -> dict[str, float]:
+    ) -> tuple[dict[str, float], dict[str, Any]]:
         ...
-

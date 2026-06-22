@@ -1,4 +1,5 @@
 import torch
+from typing import Any
 from .base import ConfidenceMethod
 from models.adapters import ModelScorer
 from domain import ParsedOutputGeneration, ConfidenceScores, ScorerOutput
@@ -23,7 +24,7 @@ class IndirectConfidenceMethod(ConfidenceMethod):
     def compute_confidence(
         self,
         parsed_output: ParsedOutputGeneration,
-    ) -> dict[str, float]:
+    ) -> tuple[dict[str, float], dict[str, Any]]:
         tail = self.tail_prompt(parsed_output.final_answer)
         if parsed_output.input_messages is not None:
             prompt = parsed_output.input_messages + [
@@ -31,7 +32,6 @@ class IndirectConfidenceMethod(ConfidenceMethod):
             ]
         else:
             prompt = parsed_output.text_question + parsed_output.text_cot + tail
-        scorer_output = self.model_scorer.forward_indirect(prompt, parsed_output.whole_cache)
-        return self.extract(scorer_output)
-
+        scorer_result, debug_info = self.model_scorer.forward_indirect(prompt, parsed_output.whole_cache)
+        return self.extract(scorer_result), debug_info
 

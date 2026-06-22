@@ -1,5 +1,5 @@
 from .data import LLMOutput, ParsedOutputGeneration, KVCache, CacheBundle, Datapoint, TrajectoryRecord, PromptRequest, PregeneratedTrajectoryRecord, Timings, AnswerSpan, ListAnswerTokenProbs
-from .confidence import ConfidenceScores, ConfidenceDebugInfo, ScorerOutput, ConfidenceTime
+from .confidence import ConfidenceScores, ScorerOutput, ConfidenceTime
 from .evaluation import EvaluationResult
 
 __all__ = [
@@ -14,7 +14,6 @@ __all__ = [
     "PregeneratedTrajectoryRecord",
     "ConfidenceScores",
     "Timings",
-    "ConfidenceDebugInfo",
     "ScorerOutput",
     "AnswerSpan",
     "ListAnswerTokenProbs",

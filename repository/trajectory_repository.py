@@ -5,6 +5,7 @@ Trajectory Repository is the bridge between the trajectory data and the rest of 
 import json
 import logging
 import traceback
+from typing import Any
 from dataclasses import asdict, fields, replace
 from pathlib import Path
 
@@ -98,6 +99,20 @@ class TrajectoryRepository:
         
 
 
+    def add(self, index: int, field_name: str, value: Any, sample: int | None = None):
+        """Add/overwrite a single field in an existing trajectory JSON. Debugging only."""
+        file_name = f"traj_{index}_sample_{sample}.json" if sample is not None else f"traj_{index}.json"
+        file_path = self.trajectory_data_path / file_name
+        if not file_path.exists():
+            raise FileNotFoundError(f"Trajectory file not found: {file_path}")
+
+        with open(file_path, "r") as f:
+            data = json.load(f)
+
+        data[field_name] = value
+
+        with open(file_path, "w") as f:
+            json.dump(data, f, indent=2)
 
 
     def update(self, trajectory_record: TrajectoryRecord, fields_to_update: list[str], sample: int | None = None):

@@ -7,8 +7,12 @@ from dotenv import load_dotenv
 
 from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteriaList, StopStringCriteria
 from transformers.utils import ModelOutput
-from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5DynamicCache
 from transformers.cache_utils import DynamicCache
+try:
+    from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5DynamicCache
+except ImportError:
+    # See domain/data.py for context — transformers >=5.5.1 dropped this class.
+    Qwen3_5DynamicCache = DynamicCache
 
 from domain.data import LLMOutput, KVCache, CacheBundle
 from models.core_models.registry import MODEL_HF_REGISTRY
@@ -18,9 +22,10 @@ logger = logging.getLogger(__name__)
 
 class LLM():
 
-    def __init__(self, model_name: str, attention_implementation: str):
+    def __init__(self, model_name: str, attention_implementation: str, debug_nocache: bool = False):
         self.model_name = model_name
         self.attention_implementation = attention_implementation
+        self.debug_nocache = debug_nocache
         self._load_model(attention_implementation)
 
 
@@ -54,7 +59,11 @@ class LLM():
         # prompt SHOULD ALREADY HAVE chat template applied
         logger.info(f"Generating text with model {self.model_name}")
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.model.device)
+
+        temp = self.tokenizer.decode(inputs.input_ids[0], skip_special_tokens=False)
+        # breakpoint()
+
 
         if stop_strings:
             stop_criteria = StoppingCriteriaList([
@@ -117,7 +126,12 @@ class LLM():
         """
         logger.info(f"Forward pass with model {self.model_name}")
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.model.device)
+
+        temp = self.tokenizer.decode(inputs.input_ids[0], skip_special_tokens=False)
+        # breakpoint()
+        
+        
         full_input_ids = inputs.input_ids
 
         # When a cache is provided, only feed the delta tokens. model.__call__()
@@ -160,10 +174,13 @@ class LLM():
         """
         we return the subset of cache that is aligned with the prompt text
         """
+        if self.debug_nocache:
+            return None
+
         if cache is None:
             return None
 
-        new_input_ids = self.tokenizer(prompt_text, return_tensors="pt").input_ids[0]
+        new_input_ids = self.tokenizer(prompt_text, return_tensors="pt", add_special_tokens=False).input_ids[0]
         lcp = cache.longest_common_prefix(new_input_ids)
 
         # here we need to take account of the cache type.
@@ -180,6 +197,7 @@ class LLM():
                 return cache.cache
             else:
                 # the cache is not aligned with the prompt text, we can't use any since qwen does not support cropping
+                logger.warning(f"Qwen Cache is NOT aligned with the prompt text, cache reuse will not be performed")
                 return None
         else:
             raise ValueError(f"Unsupported cache type: {type(cache.cache)}")

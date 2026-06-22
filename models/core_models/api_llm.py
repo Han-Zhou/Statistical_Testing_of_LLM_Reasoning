@@ -26,9 +26,22 @@ class API_LLM():
         self,
         prompt_messages: list[dict[str, str]],
         max_tokens: int,
-        temperature: float = 0.0
+        temperature: float = 0.0,
+        stop: Optional[list[str]] = None,
+        continue_final_message: bool = False,
     ) -> LLMOutput:
         logger.info(f"Generating text with model {self.model_name}")
+        kwargs = {}
+        if stop:
+            kwargs["stop"] = stop
+        if continue_final_message:
+            # phase-2 of 2-phase generation: continue the assistant turn that ends
+            # in '...\boxed{' instead of opening a new one, so the box is completed
+            # in place. vLLM-style extension; stock OpenAI ignores it.
+            kwargs["extra_body"] = {
+                "continue_final_message": True,
+                "add_generation_prompt": False,
+            }
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=prompt_messages,
@@ -36,6 +49,7 @@ class API_LLM():
             temperature=temperature,
             logprobs=True,
             top_logprobs=20,
+            **kwargs,
         )
         self._accumulate_cost(response)
         return LLMOutput(
@@ -54,8 +68,20 @@ class API_LLM():
         Technically not a forward pass
         Use case: Indirect, Verbal, and Stepbootstrap (WITHOUT FINAL ANSWER)confidence scoring
         So we generate a limited number of tokens to get the logits for the confidence scoring
+
+        If the prompt ends in an assistant message (the confidence methods append the
+        '...True/False:' / '<confidence>' tail as an assistant turn), ask the server to
+        continue that message instead of opening a new turn, so token 0's logprobs are
+        the genuine next-token distribution after the tail. Requires a vLLM-style
+        OpenAI-compatible server; stock OpenAI ignores the flag.
         """
         logger.info(f"(Fake) forward pass with model {self.model_name}")
+        kwargs = {}
+        if prompt_messages and prompt_messages[-1].get("role") == "assistant":
+            kwargs["extra_body"] = {
+                "continue_final_message": True,
+                "add_generation_prompt": False,
+            }
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=prompt_messages,
@@ -63,6 +89,7 @@ class API_LLM():
             temperature=0.0,
             logprobs=True,
             top_logprobs=20,
+            **kwargs,
         )
         self._accumulate_cost(response)
         return LLMOutput(

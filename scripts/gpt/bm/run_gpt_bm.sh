@@ -7,10 +7,10 @@
 #SBATCH --time=7-8:00:00
 #SBATCH --mem=128G
 #SBATCH --cpus-per-task=24
-#SBATCH --exclude=lux-2-node-21,lux-2-node-23
+# SBATCH --exclude=lux-2-node-21,lux-2-node-23
 
-#SBATCH --output=/shared_work/han/cot-zagreus/.slurm_logs/%j_%x.out
-#SBATCH --error=/shared_work/han/cot-zagreus/.slurm_logs/%j_%x.err
+#SBATCH --output=/storage/backup/han/backup_workspace/cot-zagreus/.slurm_logs/%j_%x.out
+#SBATCH --error=/storage/backup/han/backup_workspace/cot-zagreus/.slurm_logs/%j_%x.err
 
 
 

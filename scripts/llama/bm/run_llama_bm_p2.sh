@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=llama_bm
+#SBATCH --job-name=llama_bm_p2
 #SBATCH --qos=high
 #SBATCH --partition=compute
 #SBATCH --nodes=1
@@ -17,4 +17,4 @@ set -euo pipefail
 module load cuda/12.4
 module load conda
 conda activate cot
-scripts/llama/bm/llama_bm.sh
+scripts/llama/bm/llama_bm_p2.sh

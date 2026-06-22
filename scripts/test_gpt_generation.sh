@@ -14,7 +14,7 @@ python3 main.py \
     --nb_stepbootstrap_samples 4 \
     --sample_size 5 \
     --temperature 0.9 \
-    --tag test-gptmini-605  \
+    --tag test-gptmini-618  \
     --debug_top20
     # --discord
 

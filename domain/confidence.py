@@ -1,8 +1,13 @@
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 
 
+# Convention: `debug` fields below are free-form dicts populated only when a
+# debug flag on ConfidenceConfig is on. Add new measurements by writing a key
+# into the local dict in ConfidenceEngine; promote a key to a typed field once
+# its shape stabilizes. JSON serialization is automatic via asdict.
 @dataclass
 class ConfidenceTime:
     answer_prob_time: float
@@ -12,6 +17,7 @@ class ConfidenceTime:
     # experimental - stats for scores
     answer_score_prob_time: float | None = None
     answer_score_ent_time: float | None = None
+    debug: dict[str, Any] | None = None
 
 
 @dataclass
@@ -26,21 +32,11 @@ class ConfidenceScores:
     # verbconf_top_prob: float | None = None              # probability of that score
     step_masks: list[list[int]] | None = None           # binary list per sample: 1 = kept, 0 = masked
 
-    # debug_top20 info
-    debug_answer_top20_probabilities: list[dict[str, float]] | None = None
-
     # experimental - stats for scores
     answer_score_probabilities: list[dict[str, float]] | None = None
     answer_score_entropy: list[dict[str, float]] | None = None
 
-
-
-@dataclass
-class ConfidenceDebugInfo:
-    """Any additional info we want to log for debugging purposes."""
-    confidence_method: str   # indirect or verbal
-    tokens_extracted_for_confidence: list[str] | None = None
-    tokens_extracted_context: list[str] | None = None
+    debug: dict[str, Any] | None = None
 
 
 ScorerOutput = dict[str, torch.Tensor]

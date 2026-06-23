@@ -139,10 +139,19 @@ class Runner:
         T1 = time.perf_counter()
         rejection_confidences = []
         rejection_confidence_times = []
-        for output in rejection_generation_outputs:
-            confidence, confidence_time = self.confidence_engine.compute_confidence(output)
-            rejection_confidences.append(confidence)
-            rejection_confidence_times.append(confidence_time)
+        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+            batch_results = self.confidence_engine.compute_confidence_batch(
+                rejection_generation_outputs,
+                shared_cache=self.context.reference_vanilla_question_cache,
+            )
+            for confidence, confidence_time in batch_results:
+                rejection_confidences.append(confidence)
+                rejection_confidence_times.append(confidence_time)
+        else:
+            for output in rejection_generation_outputs:
+                confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+                rejection_confidences.append(confidence)
+                rejection_confidence_times.append(confidence_time)
         T2 = time.perf_counter()
 
         # save rejection trajectories
@@ -186,10 +195,19 @@ class Runner:
         T1 = time.perf_counter()
         lawyer_confidences = []
         lawyer_confidence_times = []
-        for output in lawyer_generation_outputs:
-            confidence, confidence_time = self.confidence_engine.compute_confidence(output)
-            lawyer_confidences.append(confidence)
-            lawyer_confidence_times.append(confidence_time)
+        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+            batch_results = self.confidence_engine.compute_confidence_batch(
+                lawyer_generation_outputs,
+                shared_cache=self.context.reference_vanilla_question_cache,
+            )
+            for confidence, confidence_time in batch_results:
+                lawyer_confidences.append(confidence)
+                lawyer_confidence_times.append(confidence_time)
+        else:
+            for output in lawyer_generation_outputs:
+                confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+                lawyer_confidences.append(confidence)
+                lawyer_confidence_times.append(confidence_time)
         T2 = time.perf_counter()
 
         # save lawyer trajectories
@@ -233,10 +251,19 @@ class Runner:
         T1 = time.perf_counter()
         stepbootstrap_confidences = []
         stepbootstrap_confidence_times = []
-        for output in stepbootstrap_generation_outputs:
-            confidence, confidence_time = self.confidence_engine.compute_confidence(output)
-            stepbootstrap_confidences.append(confidence)
-            stepbootstrap_confidence_times.append(confidence_time)
+        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+            batch_results = self.confidence_engine.compute_confidence_batch(
+                stepbootstrap_generation_outputs,
+                shared_cache=self.context.reference_vanilla_question_cache,
+            )
+            for confidence, confidence_time in batch_results:
+                stepbootstrap_confidences.append(confidence)
+                stepbootstrap_confidence_times.append(confidence_time)
+        else:
+            for output in stepbootstrap_generation_outputs:
+                confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+                stepbootstrap_confidences.append(confidence)
+                stepbootstrap_confidence_times.append(confidence_time)
         T2 = time.perf_counter()
 
         # save stepbootstrap trajectories

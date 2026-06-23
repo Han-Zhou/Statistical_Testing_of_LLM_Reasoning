@@ -32,11 +32,20 @@ class LawyerSampling(SamplingMethod):
     def generate(self) -> list[ParsedOutputGeneration]:
         """
         For Lawyer sampling, we:
-        - add a string at end of prompt, asking the model to defend the final answer 
+        - add a string at end of prompt, asking the model to defend the final answer
         - generate nb_cot_samples samples with temperature != 0.0,
         """
         # few_shot not implemented yet
         messages = self._build_messages()
+
+        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+            return self.context.model_adapter.generate_batch(
+                messages=messages,
+                max_tokens=self.generation_config.max_tokens,
+                cache=self.context.reference_vanilla_question_cache,
+                temperature=self.sampling_config.temperature,
+                num_sequences=self.sampling_config.nb_cot_samples,
+            )
 
         generation_outputs: list[ParsedOutputGeneration] = []
         for _ in range(self.sampling_config.nb_cot_samples):

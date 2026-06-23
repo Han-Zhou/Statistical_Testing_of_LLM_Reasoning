@@ -17,6 +17,7 @@ class GenerationConfig:
     discord: bool
     tag: str | None
     debug_nocache: bool
+    experimental_llama_batch: bool
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "GenerationConfig":
@@ -33,6 +34,7 @@ class GenerationConfig:
             discord=args.discord if args.discord else False,
             tag=args.tag,
             debug_nocache=args.debug_nocache,
+            experimental_llama_batch=args.experimental_llama_batch,
         )
 
 

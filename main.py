@@ -38,6 +38,12 @@ def parse():
         help="Experimental: use CUDA stream synchronization for timing.",
     )
     args.add_argument(
+        "--experimental_llama_batch",
+        action="store_true",
+        default=False,
+        help="Experimental: batch generation and forward passes for Llama (rejection/lawyer/stepbootstrap).",
+    )
+    args.add_argument(
         "--dataset",
         type=str,
         required=True,

@@ -133,8 +133,8 @@ class ParsedOutputGeneration:
     text_question: str
     text_cot: str
     text_cot_with_answer: str
-    whole_cache: CacheBundle
-    question_cache: CacheBundle
+    whole_cache: CacheBundle | None
+    question_cache: CacheBundle | None
     answer_token_probs: torch.Tensor | list[list[TopLogprob]]
     answer_token_ids: torch.Tensor | list[str]
 

@@ -1,6 +1,7 @@
 import re
 import copy
 import time
+from types import SimpleNamespace
 
 from typing import Optional, Tuple
 
@@ -119,6 +120,39 @@ class LlamaScorer(ModelScorer):
         }, debug_info)
 
 
+    def forward_batch_confidence(
+        self,
+        prompts: list[str],
+        shared_cache: CacheBundle | None = None,
+    ) -> list[torch.Tensor]:
+        """Batched forward pass returning last-token logits for each prompt.
+        If shared_cache is provided (and debug_nocache is off), uses cache-replicated batching.
+        Otherwise falls back to full-prompt left-padded batching."""
+        if shared_cache is not None and shared_cache.cache is not None and not self.model.debug_nocache:
+            # Compute the delta text for each prompt: strip the shared prefix
+            prefix_text = self.model.tokenizer.decode(
+                shared_cache.input_ids, skip_special_tokens=False
+            )
+            prefix_len = len(prefix_text)
+            delta_texts = []
+            for p in prompts:
+                if p.startswith(prefix_text):
+                    delta_texts.append(p[prefix_len:])
+                else:
+                    # Fallback: can't split cleanly, use full prompts without cache
+                    all_last_logits = self.model.forward_batch_last_logits(prompts)
+                    return [all_last_logits[i] for i in range(all_last_logits.shape[0])]
+            cache_seq_len = shared_cache.cache.get_seq_length()
+            all_last_logits = self.model.forward_batch_last_logits_with_cache(
+                delta_texts=delta_texts,
+                cache=shared_cache.cache,
+                cache_seq_len=cache_seq_len,
+            )
+        else:
+            all_last_logits = self.model.forward_batch_last_logits(prompts)
+        return [all_last_logits[i] for i in range(all_last_logits.shape[0])]
+
+
 
     # def forward_continuations(
     #     self,
@@ -201,7 +235,7 @@ class LlamaAdapter(ModelAdapter):
 
 
 
-    def _extract_cot(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], cache: KVCache, sequence_ids: torch.Tensor, cot_start_idx: int, answer_span: AnswerSpan | None) -> tuple[list[str], str, str, str, KVCache, CacheBundle]:
+    def _extract_cot(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], cache: KVCache | None, sequence_ids: torch.Tensor, cot_start_idx: int, answer_span: AnswerSpan | None) -> tuple[list[str], str, str, str, CacheBundle | None, CacheBundle | None]:
         # text_cot_with_answer contains basically everything after the "assistant" header
         text_cot_with_answer = output_text[cot_start_idx:]
         text_question = output_text[:cot_start_idx]
@@ -231,6 +265,8 @@ class LlamaAdapter(ModelAdapter):
             else:
                 cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
 
+        if cache is None:
+            return cot_steps, text_question, text_cot, text_cot_with_answer, None, None
 
         # Split the cache at the assistant-header boundary. CacheBundle.cropped_to
         # handles BPE drift downstream via longest_common_prefix, so we don't need
@@ -431,5 +467,157 @@ class LlamaAdapter(ModelAdapter):
             cache=cache,
             return_llm_output=return_llm_output,
         )
+
+
+    def generate_batch_helper(
+        self,
+        prompt: str,
+        max_tokens: int,
+        cache: KVCache | None,
+        temperature: float,
+        num_sequences: int,
+    ) -> list[LLMOutput]:
+        """Batched 2-phase generation for N sequences from the same prompt.
+        Phase 1: generate CoT with num_return_sequences=N and stop strings.
+        Phase 2: for each sequence, append answer prefix and generate answer (batched as N different prompts).
+        Returns N LLMOutput objects, one per sequence.
+        """
+        # Phase 1: generate N CoT sequences from the same prompt
+        phase_1_raw = self.model.generate_multi_sequence(
+            prompt=prompt,
+            max_tokens=max_tokens,
+            cache=cache,
+            temperature=temperature,
+            num_sequences=num_sequences,
+            stop_strings=LLAMA_STOP_STRINGS,
+        )
+        # phase_1_raw.sequences: [N, seq_len], phase_1_raw.logits: tuple of [N, vocab] per new token
+
+        N = num_sequences
+        phase_2_prompts = []
+        for i in range(N):
+            seq_text = self.model.tokenizer.decode(
+                phase_1_raw.sequences[i], skip_special_tokens=False
+            )
+            seq_text, _ = self._strip_trailing_special_token_text(seq_text)
+            phase_2_prompts.append(seq_text + "\nThe answer is \\boxed{")
+
+        # Phase 2: generate answer completions from N different prompts (batched)
+        phase_2_raw = self.model.generate_batch(
+            prompts=phase_2_prompts,
+            max_tokens=200,
+            temperature=temperature,
+            stop_strings=None,
+        )
+        # phase_2_raw.sequences: [N, max_seq_len] (left-padded)
+
+        # Unbatch into N LLMOutput objects
+        results = []
+        pad_id = self.model.tokenizer.pad_token_id or self.model.tokenizer.eos_token_id
+        for i in range(N):
+            seq_ids = phase_2_raw.sequences[i]
+            # Strip left-padding
+            non_pad = (seq_ids != pad_id).nonzero(as_tuple=False)
+            if non_pad.numel() > 0:
+                start_idx = non_pad[0].item()
+                seq_ids = seq_ids[start_idx:]
+            else:
+                seq_ids = seq_ids
+
+            # Extract per-sequence logits from the batched tuple
+            # phase_2_raw.logits is a tuple of [N, vocab] tensors, one per generated position
+            per_seq_logits = tuple(
+                logit_step[i:i+1, :] for logit_step in phase_2_raw.logits
+            )
+            per_seq_scores = tuple(
+                score_step[i:i+1, :] for score_step in phase_2_raw.scores
+            ) if hasattr(phase_2_raw, 'scores') and phase_2_raw.scores else None
+
+            # Build a namespace that looks like single-sequence GenerateDecoderOnlyOutput
+            per_seq_output = SimpleNamespace(
+                sequences=seq_ids.unsqueeze(0),  # [1, seq_len]
+                logits=per_seq_logits,
+                scores=per_seq_scores,
+                past_key_values=None,
+            )
+
+            output_text = self.model.tokenizer.decode(seq_ids, skip_special_tokens=False)
+            full_offsets = self.model.tokenizer(
+                output_text,
+                return_offsets_mapping=True,
+                add_special_tokens=False,
+            )["offset_mapping"]
+
+            results.append(LLMOutput(outputs=per_seq_output, offset_mappings=full_offsets))
+
+        return results
+
+
+    def forward_pass_batch_helper(
+        self,
+        prompts: list[str],
+        cache: KVCache | None = None,
+        cache_seq_len: int = 0,
+    ) -> list[LLMOutput]:
+        """Batched forward pass over N different prompts.
+        If cache is provided (and debug_nocache is off), uses cache-replicated batching.
+        Otherwise falls back to full-prompt left-padded batching."""
+        if cache is not None and not self.model.debug_nocache:
+            # Tokenize each prompt, take tokens beyond cache_seq_len as delta
+            delta_texts = []
+            full_ids_list = []
+            for p in prompts:
+                ids = self.model.tokenizer(p, add_special_tokens=False).input_ids
+                full_ids_list.append(ids)
+                delta_ids = ids[cache_seq_len:]
+                delta_texts.append(
+                    self.model.tokenizer.decode(delta_ids, skip_special_tokens=False)
+                )
+
+            raw_outputs = self.model.forward_batch_with_cache(
+                delta_texts=delta_texts,
+                cache=cache,
+                cache_seq_len=cache_seq_len,
+                return_llm_output=True,
+            )
+            # Patch each output to have full sequences for process_generation_output
+            results = []
+            for i, raw in enumerate(raw_outputs):
+                full_ids = torch.tensor(full_ids_list[i], dtype=torch.long).unsqueeze(0)
+                # Prepend zero logits for prefix positions so indexing aligns with full sequence
+                prefix_pad = torch.zeros(
+                    1, cache_seq_len, raw.logits.shape[-1],
+                    dtype=raw.logits.dtype, device=raw.logits.device
+                )
+                full_logits = torch.cat([prefix_pad, raw.logits], dim=1)  # [1, full_len, vocab]
+
+                seq_output = SimpleNamespace(
+                    logits=full_logits,
+                    past_key_values=raw.past_key_values,
+                    sequences=full_ids,
+                )
+
+                output_text = self.model.tokenizer.decode(full_ids[0], skip_special_tokens=False)
+                full_offsets = self.model.tokenizer(
+                    output_text,
+                    return_offsets_mapping=True,
+                    add_special_tokens=False,
+                )["offset_mapping"]
+
+                results.append(LLMOutput(outputs=seq_output, offset_mappings=full_offsets))
+            return results
+        else:
+            return self.model.forward_batch(prompts, return_llm_output=True)
+
+
+    def _strip_trailing_special_token_text(self, text: str) -> tuple[str, int]:
+        """Strip trailing special token from text, returning (cleaned_text, num_tokens_stripped)."""
+        for special_tok in self.model.tokenizer.all_special_tokens:
+            if text.endswith(special_tok):
+                special_token_ids = self.model.tokenizer(
+                    special_tok, add_special_tokens=False,
+                ).input_ids
+                return text[:-len(special_tok)], len(special_token_ids)
+        return text, 0
 
 

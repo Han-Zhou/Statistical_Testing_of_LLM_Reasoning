@@ -87,7 +87,16 @@ class StepBootstrapSampling(SamplingMethod):
 
         generation_outputs: list[ParsedOutputGeneration] = []
 
-        # NOTE possible optimization for vllm backend 
+        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+            messages_list = [
+                self._add_assistant_message_to_messages(messages, alternative_cots[i])
+                for i in range(self.sampling_config.nb_stepbootstrap_samples)
+            ]
+            generation_outputs = self.context.model_adapter.forward_pass_batch(
+                messages_list=messages_list,
+                cache=self.context.reference_vanilla_question_cache,
+            )
+            return generation_outputs
 
         for i in range(self.sampling_config.nb_stepbootstrap_samples):
             new_messages = self._add_assistant_message_to_messages(messages, alternative_cots[i])

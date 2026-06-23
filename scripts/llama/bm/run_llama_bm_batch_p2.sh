@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=llama-bm-batch
+#SBATCH --job-name=llama-bm-batch_p2
 #SBATCH --qos=high
 #SBATCH --partition=compute
 #SBATCH --nodes=1
@@ -17,4 +17,4 @@ conda activate cot
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-bash scripts/llama/bm/llama_bm_batch.sh
+bash scripts/llama/bm/llama_bm_batch_p2.sh

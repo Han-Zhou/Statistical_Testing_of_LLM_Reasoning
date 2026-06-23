@@ -12,6 +12,7 @@ class GenerationConfig:
     max_tokens: int
     sample_size: int | None
     sample_range: tuple[int, int] | None
+    sample_indices: list[int] | None
     from_pickle: str | None
     from_pregenerated: str | None
     discord: bool
@@ -29,6 +30,7 @@ class GenerationConfig:
             max_tokens=args.max_tokens,
             sample_size=args.sample_size,
             sample_range=tuple(args.sample_range) if args.sample_range else None,
+            sample_indices=cls._load_sample_indices(args.sample_indices),
             from_pickle=args.from_pickle,
             from_pregenerated=args.from_pregenerated,
             discord=args.discord if args.discord else False,
@@ -36,6 +38,13 @@ class GenerationConfig:
             debug_nocache=args.debug_nocache,
             experimental_llama_batch=args.experimental_llama_batch,
         )
+
+    @staticmethod
+    def _load_sample_indices(path: str | None) -> list[int] | None:
+        if path is None:
+            return None
+        with open(path) as f:
+            return [int(line.strip()) for line in f if line.strip()]
 
 
 

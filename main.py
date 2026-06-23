@@ -118,6 +118,12 @@ def parse():
         help="Number of stepbootstrap samples for confidence scoring. Defaults to 3. Must not be set with --vanilla_only.",
     )
     args.add_argument(
+        "--sample_indices",
+        type=str,
+        default=None,
+        help="Path to a file with one integer index per line. Runs only those datapoints.",
+    )
+    args.add_argument(
         "--sample_range",
         type=int,
         nargs=2,

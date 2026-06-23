@@ -321,8 +321,12 @@ class Runner:
         else:
             datapoints: list[Datapoint] = self.dataset.load_datapoints()
 
-        # sample_range and sample_size are mutually exclusive; sample_range wins if both are set.
-        if self.generation_config.sample_range is not None:
+        # sample_indices, sample_range, and sample_size are mutually exclusive (priority in that order).
+        if self.generation_config.sample_indices is not None:
+            indices = self.generation_config.sample_indices
+            datapoints = [datapoints[i] for i in indices if i < len(datapoints)]
+            samples = "sfull"
+        elif self.generation_config.sample_range is not None:
             start, end = self.generation_config.sample_range
             start = max(0, start)
             end = min(len(datapoints), end)

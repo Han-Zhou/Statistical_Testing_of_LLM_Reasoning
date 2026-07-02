@@ -6,13 +6,11 @@ from tqdm import tqdm
 
 # INCLUSIVE [start, end]
 trajectories_dict = {
-    "trajectories/llama-bm-610_llama_bigbench_movie_sfull": (0, 100),
-    "trajectories/llama-bm-610-p2_llama_bigbench_movie_s101_150": (101, 149),
-    "trajectories/llama-bm-610-p3_llama_bigbench_movie_s150_200": (150, 199),
-    "trajectories/llama-bm-610-p4_llama_bigbench_movie_s200_250": (200, 249),
+    "trajectories/llama-bm-623-batch_llama_bigbench_movie_sfull": (0, 53),
+    "trajectories/llama-bm-623-batch-p2_llama_bigbench_movie_s53_250": (54, 249),
 }
 
-output_dir_name = "trajectories/MERGED_llama-bm-610-bigbench_movie_sfull"
+output_dir_name = "trajectories/MERGED_llama-bm-623-batch-bigbench_movie_sfull"
 
 SUBDIRS = ("vanilla", "rejection", "lawyer", "stepbootstrap")
 

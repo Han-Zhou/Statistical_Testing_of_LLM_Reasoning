@@ -131,16 +131,21 @@ class ConfidenceEngine:
     
     
 
+    @staticmethod
+    def _normalize_openai_logprobs(top_logprobs: list[TopLogprob]) -> dict[str, float]:
+        """OpenAI TopLogprob list → {token_str: probability}."""
+        return {lp.token: math.exp(lp.logprob) for lp in top_logprobs}
+
+    def _normalize_vllm_logprobs(self, logprob_dict: dict[int, float]) -> dict[str, float]:
+        """vLLM dict[token_id, probability] → {token_str: probability}."""
+        tokenizer = self.model_scorer.model.tokenizer
+        return {tokenizer.decode([tok_id]): prob for tok_id, prob in logprob_dict.items()}
+
     def _compute_confidence_list_probs(self, parsed_output: ParsedOutputGeneration) -> tuple[ConfidenceScores, ConfidenceTime]:
-        # answer_token_probs is list[list[TopLogprob]]: per answer-token position,
-        # the top-N (token, logprob) pairs returned by the API. answer_token_ids
-        # is list[str] of the actually-sampled token strings (already decoded).
-        # We only see the top-N distribution, not the full vocab.
-        top_logprobs_per_pos: list[list[TopLogprob]] = parsed_output.answer_token_probs
         sampled_tokens: list[str] = parsed_output.answer_token_ids
+        raw_probs_per_pos = parsed_output.answer_token_probs
 
-
-
+        is_vllm = len(raw_probs_per_pos) > 0 and isinstance(raw_probs_per_pos[0], dict)
 
         answer_probabilities: list[dict[str, float]] = []
         answer_entropy: list[dict[str, float]] = []
@@ -148,22 +153,29 @@ class ConfidenceEngine:
         answer_top20_probabilities: list[dict[str, float]] | None = (
             [] if self.confidence_config.debug_top20 else None
         )
+        answer_prob_time = 0.0
+        answer_ent_time = 0.0
 
-        for token_str, top_logprobs in zip(sampled_tokens, top_logprobs_per_pos):
-            scores = {lp.token: lp.logprob for lp in top_logprobs}
-            # Sampled token's probability: 0.0 if it fell outside the top-N.
-            sampled_logprob = scores.get(token_str)
-            sampled_prob = math.exp(sampled_logprob) if sampled_logprob is not None else 0.0
+        for token_str, raw_entry in zip(sampled_tokens, raw_probs_per_pos):
+            t1 = self.time_stamp()
+            if is_vllm:
+                probs_by_token = self._normalize_vllm_logprobs(raw_entry)
+            else:
+                probs_by_token = self._normalize_openai_logprobs(raw_entry)
 
-            # Entropy over the available top-N only (no full vocab from the API).
-            top_probs = [math.exp(lp) for lp in scores.values()]
+            sampled_prob = probs_by_token.get(token_str, 0.0)
+            t2 = self.time_stamp()
+            top_probs = list(probs_by_token.values())
             entropy = -sum(p * math.log(p) for p in top_probs if p > 0.0)
+            t3 = self.time_stamp()
+            answer_prob_time += t2 - t1
+            answer_ent_time += t3 - t2
 
             answer_probabilities.append({token_str: sampled_prob})
             answer_entropy.append({token_str: entropy})
 
             if answer_top20_probabilities is not None:
-                answer_top20_probabilities.append({tok: math.exp(lp) for tok, lp in scores.items()})
+                answer_top20_probabilities.append(probs_by_token)
 
         if answer_top20_probabilities is not None:
             scores_debug["answer_top20_probabilities"] = answer_top20_probabilities
@@ -195,8 +207,8 @@ class ConfidenceEngine:
             debug=scores_debug or None,
         )
         confidence_time = ConfidenceTime(
-            answer_prob_time=0.0,
-            answer_ent_time=0.0,
+            answer_prob_time=answer_prob_time,
+            answer_ent_time=answer_ent_time,
             indirect_time=indirect_time,
             verbconf_time=verbconf_time,
             answer_score_prob_time=0.0,
@@ -262,12 +274,14 @@ class ConfidenceEngine:
                 indirect_prompts.append(po.text_question + po.text_cot + indirect_tail)
                 verbal_prompts.append(po.text_question + po.text_cot + verbal_tail)
 
-        # One batched forward pass for all 2N prompts
-        all_prompts = indirect_prompts + verbal_prompts
+        # Two batched forward passes: one for indirect, one for verbal
         t0 = self.time_stamp()
-        all_last_logits = self.model_scorer.forward_batch_confidence(all_prompts, shared_cache=shared_cache)
+        indirect_last_logits = self.model_scorer.forward_batch_confidence(indirect_prompts, shared_cache=shared_cache)
         t1 = self.time_stamp()
-        batch_time = t1 - t0
+        verbal_last_logits = self.model_scorer.forward_batch_confidence(verbal_prompts, shared_cache=shared_cache)
+        t2 = self.time_stamp()
+        indirect_time = t1 - t0
+        verbconf_time = t2 - t1
 
         # Extract indirect and verbal results
         true_id = tok(ANSWER_TOKENS[' True'][0], add_special_tokens=False).input_ids[0]
@@ -281,15 +295,15 @@ class ConfidenceEngine:
         results = []
         for i, po in enumerate(parsed_outputs):
             # Indirect: logits at position i
-            indirect_logits = all_last_logits[i]
+            indirect_logits = indirect_last_logits[i]
             scorer_output_indirect = {
                 'True': indirect_logits[true_id].detach().cpu(),
                 'False': indirect_logits[false_id].detach().cpu(),
             }
             indirect_scores = self.indirect_confidence_method.extract(scorer_output_indirect)
 
-            # Verbal: logits at position N + i
-            verbal_logits = all_last_logits[N + i]
+            # Verbal: logits at position i
+            verbal_logits = verbal_last_logits[i]
             scorer_output_verbal = {
                 s: verbal_logits[tid].detach().cpu()
                 for s, tid in zip(verbal_token_strs, verbal_token_ids)
@@ -312,10 +326,15 @@ class ConfidenceEngine:
             if answer_token_score_probs is not None:
                 ids = po.answer_token_ids.detach().cpu().long()
                 answer_token_score_probs = answer_token_score_probs.detach().cpu()
+                t_s1 = self.time_stamp()
                 selected_score_probs = answer_token_score_probs.gather(-1, ids.unsqueeze(-1)).squeeze(-1)
+                t_s2 = self.time_stamp()
                 score_probs_for_entropy = answer_token_score_probs.double()
                 logprobs = torch.nan_to_num(score_probs_for_entropy.log(), neginf=-99)
                 entropies = -torch.sum(score_probs_for_entropy * logprobs, dim=-1)
+                t_s3 = self.time_stamp()
+                answer_score_prob_time += t_s2 - t_s1
+                answer_score_ent_time += t_s3 - t_s2
                 for j, (prob, tok_id) in enumerate(zip(selected_score_probs.tolist(), ids.tolist())):
                     token_str = tok.decode([int(tok_id)])
                     answer_score_probs.append({token_str: float(prob)})
@@ -323,10 +342,15 @@ class ConfidenceEngine:
 
             if probs.numel() > 0:
                 ids = po.answer_token_ids.detach().cpu().long()
+                t_a1 = self.time_stamp()
                 selected_probs = probs.gather(-1, ids.unsqueeze(-1)).squeeze(-1)
+                t_a2 = self.time_stamp()
                 probs_for_entropy = probs.double()
                 logprobs_e = torch.nan_to_num(probs_for_entropy.log(), neginf=-99)
                 entropies_e = -torch.sum(probs_for_entropy * logprobs_e, dim=-1)
+                t_a3 = self.time_stamp()
+                answer_prob_time += t_a2 - t_a1
+                answer_ent_time += t_a3 - t_a2
 
                 if self.confidence_config.debug_top20:
                     top_k = min(20, probs.shape[-1])
@@ -354,8 +378,8 @@ class ConfidenceEngine:
             confidence_time = ConfidenceTime(
                 answer_prob_time=answer_prob_time,
                 answer_ent_time=answer_ent_time,
-                indirect_time=batch_time / (2 * N),
-                verbconf_time=batch_time / (2 * N),
+                indirect_time=indirect_time,
+                verbconf_time=verbconf_time,
                 answer_score_prob_time=answer_score_prob_time,
                 answer_score_ent_time=answer_score_ent_time,
                 debug=None,

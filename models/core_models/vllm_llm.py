@@ -93,7 +93,7 @@ class VLLM_LLM():
 
         sampling = SamplingParams(
             temperature=0.0,
-            max_tokens=0,
+            max_tokens=1,
             prompt_logprobs=20,
             skip_special_tokens=False,
         )

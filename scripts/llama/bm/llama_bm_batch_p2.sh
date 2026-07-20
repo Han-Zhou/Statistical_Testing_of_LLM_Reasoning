@@ -13,4 +13,5 @@ python3 main.py \
     --tag llama-bm-623-batch-p2 \
     --experimental_llama_batch \
     --debug_top20 \
-    --sample_range 53 250
+    --sample_range 53 250 \
+    --discord

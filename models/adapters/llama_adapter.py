@@ -496,9 +496,8 @@ class LlamaAdapter(ModelAdapter):
         N = num_sequences
         phase_2_prompts = []
         for i in range(N):
-            seq_text = self.model.tokenizer.decode(
-                phase_1_raw.sequences[i], skip_special_tokens=False
-            )
+            seq_ids, _ = self._truncate_trailing_eos(phase_1_raw.sequences[i])
+            seq_text = self.model.tokenizer.decode(seq_ids, skip_special_tokens=False)
             seq_text, _ = self._strip_trailing_special_token_text(seq_text)
             phase_2_prompts.append(seq_text + "\nThe answer is \\boxed{")
 
@@ -514,6 +513,10 @@ class LlamaAdapter(ModelAdapter):
         # Unbatch into N LLMOutput objects
         results = []
         pad_id = self.model.tokenizer.pad_token_id or self.model.tokenizer.eos_token_id
+        prompt_lengths = [
+            len(self.model.tokenizer(p, add_special_tokens=False).input_ids)
+            for p in phase_2_prompts
+        ]
         for i in range(N):
             seq_ids = phase_2_raw.sequences[i]
             # Strip left-padding
@@ -524,13 +527,18 @@ class LlamaAdapter(ModelAdapter):
             else:
                 seq_ids = seq_ids
 
-            # Extract per-sequence logits from the batched tuple
-            # phase_2_raw.logits is a tuple of [N, vocab] tensors, one per generated position
+            # Strip trailing eos padding from right side
+            seq_ids, num_trailing_removed = self._truncate_trailing_eos(seq_ids)
+
+            # Number of generated tokens for this sequence (after truncation)
+            num_generated = len(seq_ids) - prompt_lengths[i]
+
+            # Extract per-sequence logits from the batched tuple, trimmed to actual generated length
             per_seq_logits = tuple(
-                logit_step[i:i+1, :] for logit_step in phase_2_raw.logits
+                logit_step[i:i+1, :] for logit_step in phase_2_raw.logits[:num_generated]
             )
             per_seq_scores = tuple(
-                score_step[i:i+1, :] for score_step in phase_2_raw.scores
+                score_step[i:i+1, :] for score_step in phase_2_raw.scores[:num_generated]
             ) if hasattr(phase_2_raw, 'scores') and phase_2_raw.scores else None
 
             # Build a namespace that looks like single-sequence GenerateDecoderOnlyOutput
@@ -619,5 +627,18 @@ class LlamaAdapter(ModelAdapter):
                 ).input_ids
                 return text[:-len(special_tok)], len(special_token_ids)
         return text, 0
+
+
+    def _truncate_trailing_eos(self, seq: torch.Tensor) -> tuple[torch.Tensor, int]:
+        """Strip all trailing eos_token_id tokens from a 1-D token tensor.
+        Returns (truncated_tensor, num_tokens_removed).
+        Handles batched generation padding where shorter sequences are padded with eos_token_id."""
+        eos_id = self.model.tokenizer.eos_token_id
+        mask = seq != eos_id
+        if mask.any():
+            last_real = mask.nonzero(as_tuple=False)[-1].item()
+            truncated = seq[:last_real + 1]
+            return truncated, len(seq) - len(truncated)
+        return seq, 0
 
 

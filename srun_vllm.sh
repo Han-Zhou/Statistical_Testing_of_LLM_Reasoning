@@ -9,7 +9,6 @@ srun \
     --time=18:00:00 \
     --mem=256G \
     --cpus-per-task=24 \
-    --exclude=lux-2-node-25 \
     bash -c "
         set -euo pipefail
         module load cuda/12.8

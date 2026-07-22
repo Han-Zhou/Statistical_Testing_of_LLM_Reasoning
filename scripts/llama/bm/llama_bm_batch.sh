@@ -10,7 +10,7 @@ python3 main.py \
     --nb_cot_samples 32 \
     --nb_stepbootstrap_samples 100 \
     --temperature 0.9 \
-    --tag llama-bm-629-batch \
+    --tag llama-bm-721-batch \
     --experimental_llama_batch \
     --debug_top20 \
     --discord

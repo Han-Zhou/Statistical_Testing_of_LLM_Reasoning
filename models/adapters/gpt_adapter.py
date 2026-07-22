@@ -360,3 +360,14 @@ class GptAdapter(ModelAdapter):
         output = self.forward_pass_helper(prompt_text, cache, return_llm_output=True)
         return self.process_generation_output(output, type="forward_pass")
 
+
+    async def forward_pass_async(
+        self,
+        messages: list[dict[str, str]],
+        cache: Optional[CacheBundle] = None,
+    ) -> ParsedOutputGeneration:
+        """Asynchronous GPT forward pass; preserves the serial parser path."""
+        prompt_text = self.render_prompt(messages)
+        cache = self.align_cache(cache, prompt_text)
+        output = await self.model.forward_async(prompt_text)
+        return self.process_generation_output(output, type="forward_pass")

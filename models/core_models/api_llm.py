@@ -1,6 +1,6 @@
 import logging
 import os
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 from typing import Optional
 
 from openai.types.chat.chat_completion import ChatCompletion
@@ -15,6 +15,10 @@ class API_LLM():
     def __init__(self, model_name: str):
         # this is not a good design pattern, but right now only one API model is supported
         self.client = OpenAI(
+            base_url=os.getenv("OPENAI_BASE_URL"),
+            api_key=os.getenv("OPENAI_API_KEY")
+        )
+        self.async_client = AsyncOpenAI(
             base_url=os.getenv("OPENAI_BASE_URL"),
             api_key=os.getenv("OPENAI_API_KEY")
         )
@@ -100,6 +104,36 @@ class API_LLM():
         )
 
 
+    async def forward_async(
+        self,
+        prompt_messages: list[dict[str, str]],
+    ) -> LLMOutput:
+        """Async equivalent of ``forward`` for concurrent independent prompts."""
+        logger.info(f"(Async fake) forward pass with model {self.model_name}")
+        kwargs = {}
+        if prompt_messages and prompt_messages[-1].get("role") == "assistant":
+            kwargs["extra_body"] = {
+                "continue_final_message": True,
+                "add_generation_prompt": False,
+            }
+        response = await self.async_client.chat.completions.create(
+            model=self.model_name,
+            messages=prompt_messages,
+            max_tokens=20,
+            temperature=0.0,
+            logprobs=True,
+            top_logprobs=20,
+            **kwargs,
+        )
+        self._accumulate_cost(response)
+        return LLMOutput(
+            outputs=response,
+            offset_mappings=None,
+            text_question=self._render_messages(prompt_messages),
+            input_messages=prompt_messages,
+        )
+
+
     def _accumulate_cost(self, response: ChatCompletion) -> None:
         price = MODEL_API_PRICING[self.model_name]
         usage = response.usage
@@ -121,5 +155,4 @@ class API_LLM():
     # align_cache always returns None; this does not support caching at all
     def align_cache(self, cache: Optional[CacheBundle], prompt_text: str) -> Optional[KVCache]:
         return None
-
 

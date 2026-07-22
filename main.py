@@ -44,6 +44,12 @@ def parse():
         help="Experimental: batch generation and forward passes for Llama (rejection/lawyer/stepbootstrap).",
     )
     args.add_argument(
+        "--api_concurrency",
+        type=int,
+        default=1,
+        help="Maximum concurrent GPT stepbootstrap API requests. 1 preserves serial behavior.",
+    )
+    args.add_argument(
         "--dataset",
         type=str,
         required=True,

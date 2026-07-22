@@ -529,6 +529,13 @@ class LLM():
         cache_mask = torch.ones(N, cache_seq_len, dtype=torch.long, device=self.model.device)
         full_attention_mask = torch.cat([cache_mask, delta_inputs.attention_mask], dim=1)
 
+        # Assign positions from the attention mask so left-padding does not shift
+        # real delta tokens relative to the cached prefix. Only delta positions
+        # are passed because the cached prefix has already been processed.
+        full_position_ids = full_attention_mask.long().cumsum(dim=1) - 1
+        full_position_ids.masked_fill_(full_attention_mask == 0, 1)
+        delta_position_ids = full_position_ids[:, -max_delta_len:]
+
         # Replicate cache along batch dim (no copy — expand shares memory)
         batched_cache = DynamicCache()
         for layer_idx, layer in enumerate(cache.layers):
@@ -540,6 +547,7 @@ class LLM():
             outputs = self.model(
                 input_ids=delta_inputs.input_ids,
                 attention_mask=full_attention_mask,
+                position_ids=delta_position_ids,
                 past_key_values=batched_cache,
                 use_cache=False,
                 return_dict=True,
@@ -548,4 +556,3 @@ class LLM():
         self.tokenizer.padding_side = "right"
         # Last position = last real token for each row
         return outputs.logits[:, -1, :]  # [N, vocab]
-

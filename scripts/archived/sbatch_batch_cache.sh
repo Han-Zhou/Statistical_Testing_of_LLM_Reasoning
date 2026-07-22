@@ -11,8 +11,10 @@
 #SBATCH --error=.slurm_logs/batch_cache_%j.err
 
 set -euo pipefail
+source "${SLURM_SUBMIT_DIR:-.}/scripts/discord_notify.sh"
 module load cuda/12.4
 module load conda
 conda activate cot
 
 bash scripts/test_llama_batch_cache.sh
+notify_discord "[SUCCESS] ${discord_job_name} completed successfully on $(hostname) (job ${SLURM_JOB_ID:-local})."

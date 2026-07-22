@@ -420,7 +420,7 @@ class LlamaAdapter(ModelAdapter):
         """
         2-phase generation; 
         1. generate the cot part, with stop strings LLAMA_STOP_STRINGS
-        2. generate the answer part, with "The answer is \\boxed{"
+        2. generate the answer part, with "Therefore the answer is \\boxed{"
         """
         # phase 1
         phase_1_outputs: LLMOutput = self.model.generate(
@@ -442,7 +442,7 @@ class LlamaAdapter(ModelAdapter):
             phase_1_outputs_text,
             phase_1_outputs_raw.past_key_values,
         )
-        phase_2_prompt = phase_1_outputs_text + "\nThe answer is \\boxed{"
+        phase_2_prompt = phase_1_outputs_text + "\nTherefore the answer is \\boxed{"
         phase_2_outputs: LLMOutput = self.model.generate(
             prompt=phase_2_prompt,
             max_tokens=200,
@@ -499,7 +499,7 @@ class LlamaAdapter(ModelAdapter):
             seq_ids, _ = self._truncate_trailing_eos(phase_1_raw.sequences[i])
             seq_text = self.model.tokenizer.decode(seq_ids, skip_special_tokens=False)
             seq_text, _ = self._strip_trailing_special_token_text(seq_text)
-            phase_2_prompts.append(seq_text + "\nThe answer is \\boxed{")
+            phase_2_prompts.append(seq_text + "\nTherefore the answer is \\boxed{")
 
         # Phase 2: generate answer completions from N different prompts (batched)
         phase_2_raw = self.model.generate_batch(
@@ -640,5 +640,4 @@ class LlamaAdapter(ModelAdapter):
             truncated = seq[:last_real + 1]
             return truncated, len(seq) - len(truncated)
         return seq, 0
-
 

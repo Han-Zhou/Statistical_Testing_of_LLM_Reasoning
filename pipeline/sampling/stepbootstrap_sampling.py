@@ -1,4 +1,5 @@
 import re
+import asyncio
 import numpy as np
 
 from pipeline.sampling.base import SamplingMethod
@@ -114,3 +115,38 @@ class StepBootstrapSampling(SamplingMethod):
             generation_outputs.append(generate_output)
 
         return generation_outputs
+
+
+    async def generate_async(self, concurrency: int = 8, progress_callback=None) -> list[ParsedOutputGeneration]:
+        """Run GPT step-bootstrap forward requests concurrently.
+
+        The prompt construction, parsing, and API-specific answer-token handling
+        match ``generate``; only the independent network calls are overlapped.
+        Results are returned in the same order as the generated alternatives.
+        """
+        if concurrency < 1:
+            raise ValueError("concurrency must be at least 1")
+        if self.generation_config.model != "gpt":
+            raise NotImplementedError("Async step-bootstrap is currently GPT-only")
+
+        messages = self.context.dataset.build_messages(
+            self.context.datapoint,
+            prompt_request=PromptRequest(few_shot=False, prompt_type=self.generation_config.prompt_type),
+        )
+        alternative_cots = self._alternative_cots_stepbootstrap()
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def run_one(alternative_cot: str) -> ParsedOutputGeneration:
+            new_messages = self._add_assistant_message_to_messages(messages, alternative_cot)
+            async with semaphore:
+                generate_output = await self.context.model_adapter.forward_pass_async(
+                    messages=new_messages,
+                    cache=self.context.reference_vanilla_question_cache,
+                )
+            if self.generation_config.backend == "api":
+                generate_output.answer_token_ids = self.context.reference_vanilla_answer_tokens_for_api
+            if progress_callback is not None:
+                progress_callback()
+            return generate_output
+
+        return list(await asyncio.gather(*(run_one(cot) for cot in alternative_cots)))

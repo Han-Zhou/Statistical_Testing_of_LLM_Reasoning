@@ -19,6 +19,7 @@ class GenerationConfig:
     tag: str | None
     debug_nocache: bool
     experimental_llama_batch: bool
+    api_concurrency: int = 1
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "GenerationConfig":
@@ -37,6 +38,7 @@ class GenerationConfig:
             tag=args.tag,
             debug_nocache=args.debug_nocache,
             experimental_llama_batch=args.experimental_llama_batch,
+            api_concurrency=args.api_concurrency,
         )
 
     @staticmethod
@@ -81,8 +83,6 @@ class SamplingConfig:
             nb_stepbootstrap_samples=args.nb_stepbootstrap_samples,
             seed_stepbootstrap=args.seed_stepbootstrap,
         )
-
-
 
 
 

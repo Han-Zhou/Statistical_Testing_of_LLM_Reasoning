@@ -1,4 +1,5 @@
 
+import asyncio
 import time
 import logging
 
@@ -247,7 +248,14 @@ class Runner:
         # generate stepbootstrap samples & confidences
         datapoint = self.context.datapoint
         T0 = time.perf_counter()
-        stepbootstrap_generation_outputs: list[ParsedOutputGeneration] = self.stepbootstrap_sampling.generate()
+        if self.generation_config.model == "gpt" and self.generation_config.api_concurrency > 1:
+            stepbootstrap_generation_outputs = asyncio.run(
+                self.stepbootstrap_sampling.generate_async(
+                    concurrency=self.generation_config.api_concurrency,
+                )
+            )
+        else:
+            stepbootstrap_generation_outputs = self.stepbootstrap_sampling.generate()
         T1 = time.perf_counter()
         stepbootstrap_confidences = []
         stepbootstrap_confidence_times = []
@@ -355,6 +363,5 @@ class Runner:
         
 
         
-
 
 

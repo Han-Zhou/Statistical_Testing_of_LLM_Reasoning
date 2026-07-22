@@ -50,6 +50,21 @@ def parse():
         help="Maximum concurrent GPT stepbootstrap API requests. 1 preserves serial behavior.",
     )
     args.add_argument(
+        "--api_datapoint_retries",
+        type=int,
+        default=3,
+        help=(
+            "Number of times to retry a whole datapoint after a transient API "
+            "502/503, timeout, or connection error."
+        ),
+    )
+    args.add_argument(
+        "--api_retry_initial_delay",
+        type=float,
+        default=5.0,
+        help="Initial retry delay in seconds; the delay doubles after each failure.",
+    )
+    args.add_argument(
         "--dataset",
         type=str,
         required=True,
@@ -184,6 +199,10 @@ def check_args(args: argparse.Namespace):
         raise ValueError("GPT model only supports API backend")
     if (args.model == "llama" or args.model == "qwen") and args.backend != "hf":
         raise ValueError("Llama or Qwen model only supports Hugginface backend")
+    if args.api_datapoint_retries < 0:
+        raise ValueError("--api_datapoint_retries must be non-negative")
+    if args.api_retry_initial_delay < 0:
+        raise ValueError("--api_retry_initial_delay must be non-negative")
 
 
 

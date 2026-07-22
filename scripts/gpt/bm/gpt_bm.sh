@@ -13,8 +13,9 @@ python3 main.py \
     --nb_cot_samples 32 \
     --nb_stepbootstrap_samples 100 \
     --temperature 0.9 \
-    --tag gpt-bm-720  \
+    --tag gpt-bm-722  \
     --api_concurrency 100 \
+    --api_datapoint_retries 7 \
     --discord \
     --debug_top20
 

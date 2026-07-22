@@ -4,6 +4,7 @@ import time
 import logging
 
 from dotenv import load_dotenv
+from openai import APIConnectionError, APITimeoutError, InternalServerError
 from tqdm import tqdm
 from tqdm.contrib.discord import tqdm as tqdm_discord
 
@@ -322,6 +323,59 @@ class Runner:
         # clear the all datapoint-related fields in the context to avoid accidentally using them for the next datapoint
         self.context.clear()
 
+    @staticmethod
+    def _is_retryable_api_error(error: BaseException) -> bool:
+        """Return whether ``error`` matches a known transient API failure."""
+        if isinstance(error, (APITimeoutError, APIConnectionError)):
+            return True
+        if not isinstance(error, InternalServerError):
+            return False
+
+        status_code = getattr(error, "status_code", None)
+        if status_code in (502, 503):
+            return True
+
+        # Some OpenAI-compatible servers return an HTML/string error without a
+        # usable status_code on the exception. Retain narrow fallbacks for the
+        # two transient responses observed in trajectory error files.
+        message = str(error).lower()
+        return "502 bad gateway" in message or "system_memory_overloaded" in message
+
+    def _run_datapoint_with_retries(self, datapoint: Datapoint) -> None:
+        max_retries = self.generation_config.api_datapoint_retries
+        initial_delay = self.generation_config.api_retry_initial_delay
+
+        for attempt in range(max_retries + 1):
+            try:
+                self.run_generation_and_confidence(datapoint)
+                return
+            except Exception as error:
+                self.context.clear()
+                retryable = self._is_retryable_api_error(error)
+                retries_remaining = max_retries - attempt
+
+                if retryable and retries_remaining > 0:
+                    delay = initial_delay * (2 ** attempt)
+                    logger.warning(
+                        "datapoint %s failed with %s; retrying in %.1fs "
+                        "(%d retries remaining)",
+                        datapoint.id,
+                        type(error).__name__,
+                        delay,
+                        retries_remaining,
+                    )
+                    if delay > 0:
+                        time.sleep(delay)
+                    continue
+
+                logger.exception(
+                    "datapoint %s failed%s",
+                    datapoint.id,
+                    " after retries" if retryable else " with a non-retryable error",
+                )
+                self.vanilla_trajectory_repository.save_error(datapoint.id, error)
+                return
+
 
     def run(self):
         if self.generation_config.from_pickle is not None:
@@ -352,16 +406,9 @@ class Runner:
         tag = self.generation_config.tag
         desc = f"Generating [{tag}]" if tag else "Generating"
         for datapoint in progress(datapoints, desc=desc, unit="sample", total=len(datapoints)):
-            try:
-                self.run_generation_and_confidence(datapoint)
-            except Exception as e:
-                logger.exception(f"datapoint {datapoint.id} failed")
-                self.vanilla_trajectory_repository.save_error(datapoint.id, e)
-                self.context.clear()
-                continue
+            self._run_datapoint_with_retries(datapoint)
         
         
 
         
-
 

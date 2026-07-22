@@ -20,6 +20,8 @@ class GenerationConfig:
     debug_nocache: bool
     experimental_llama_batch: bool
     api_concurrency: int = 1
+    api_datapoint_retries: int = 3
+    api_retry_initial_delay: float = 5.0
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "GenerationConfig":
@@ -39,6 +41,8 @@ class GenerationConfig:
             debug_nocache=args.debug_nocache,
             experimental_llama_batch=args.experimental_llama_batch,
             api_concurrency=args.api_concurrency,
+            api_datapoint_retries=args.api_datapoint_retries,
+            api_retry_initial_delay=args.api_retry_initial_delay,
         )
 
     @staticmethod
@@ -83,7 +87,6 @@ class SamplingConfig:
             nb_stepbootstrap_samples=args.nb_stepbootstrap_samples,
             seed_stepbootstrap=args.seed_stepbootstrap,
         )
-
 
 
 

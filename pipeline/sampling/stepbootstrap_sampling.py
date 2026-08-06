@@ -17,9 +17,16 @@ _STEP_MARKER_RE = re.compile(r"(Step\s+\d+\s*:)", re.IGNORECASE)
 def _resample_steps(steps: list[str], rng: np.random.Generator) -> list[str]:
     if len(steps) < 2:
         return list(steps)
-    prefix = steps[:-1]
-    resampled = list(rng.choice(prefix, size=len(prefix), replace=True))
-    return resampled + [steps[-1]]
+
+    # Bootstrap the non-final steps by index, then restore their original
+    # ordering. Sampling with replacement still permits duplicate and omitted
+    # steps, while sorting prevents the reconstructed reasoning from being
+    # randomly scrambled. The final step is always preserved at the end.
+    prefix_size = len(steps) - 1
+    sampled_indices = np.sort(
+        rng.choice(prefix_size, size=prefix_size, replace=True)
+    )
+    return [steps[int(index)] for index in sampled_indices] + [steps[-1]]
 
 def _rebuild_cot(steps: list[str]) -> str:
     # Renumber 'Step N:' so the result is monotonic; leave non-marker steps as-is.

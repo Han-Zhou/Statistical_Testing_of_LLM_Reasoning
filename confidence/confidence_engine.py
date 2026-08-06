@@ -1,4 +1,5 @@
 
+import asyncio
 import math
 import time
 from typing import Any
@@ -235,6 +236,95 @@ class ConfidenceEngine:
             return self._compute_confidence_list_probs(parsed_output)
         else:
             raise ValueError(f"Unsupported answer_token_probs type: {type(parsed_output.answer_token_probs)}")
+
+    async def _compute_confidence_list_probs_async(
+        self,
+        parsed_output: ParsedOutputGeneration,
+        semaphore: asyncio.Semaphore,
+    ) -> tuple[ConfidenceScores, ConfidenceTime]:
+        """Score one API output while limiting each remote confidence request."""
+        sampled_tokens: list[str] = parsed_output.answer_token_ids
+        raw_probs_per_pos = parsed_output.answer_token_probs
+        is_vllm = len(raw_probs_per_pos) > 0 and isinstance(raw_probs_per_pos[0], dict)
+
+        answer_probabilities: list[dict[str, float]] = []
+        answer_entropy: list[dict[str, float]] = []
+        answer_top20_probabilities = [] if self.confidence_config.debug_top20 else None
+        answer_prob_time = 0.0
+        answer_ent_time = 0.0
+
+        for token_str, raw_entry in zip(sampled_tokens, raw_probs_per_pos):
+            t1 = self.time_stamp()
+            if is_vllm:
+                probs_by_token = self._normalize_vllm_logprobs(raw_entry)
+            else:
+                probs_by_token = self._normalize_openai_logprobs(raw_entry)
+            sampled_prob = probs_by_token.get(token_str, 0.0)
+            t2 = self.time_stamp()
+            top_probs = list(probs_by_token.values())
+            entropy = -sum(p * math.log(p) for p in top_probs if p > 0.0)
+            t3 = self.time_stamp()
+            answer_prob_time += t2 - t1
+            answer_ent_time += t3 - t2
+            answer_probabilities.append({token_str: sampled_prob})
+            answer_entropy.append({token_str: entropy})
+            if answer_top20_probabilities is not None:
+                answer_top20_probabilities.append(probs_by_token)
+
+        async with semaphore:
+            t1 = self.time_stamp()
+            indirect_scores, debug_indirect = (
+                await self.indirect_confidence_method.compute_confidence_async(parsed_output)
+            )
+            t2 = self.time_stamp()
+        async with semaphore:
+            t3 = self.time_stamp()
+            verbal_scores, debug_verbal = (
+                await self.verbal_confidence_method.compute_confidence_async(parsed_output)
+            )
+            t4 = self.time_stamp()
+
+        scores_debug = None
+        if answer_top20_probabilities is not None:
+            scores_debug = {"answer_top20_probabilities": answer_top20_probabilities}
+        scores = ConfidenceScores(
+            answer_probabilities=answer_probabilities,
+            answer_entropy=answer_entropy,
+            indirect_probabilities=indirect_scores,
+            verbconf_probabilities=verbal_scores,
+            answer_score_probabilities=[],
+            answer_score_entropy=[],
+            debug=scores_debug,
+        )
+        timings = ConfidenceTime(
+            answer_prob_time=answer_prob_time,
+            answer_ent_time=answer_ent_time,
+            indirect_time=t2 - t1,
+            verbconf_time=t4 - t3,
+            answer_score_prob_time=0.0,
+            answer_score_ent_time=0.0,
+            debug={
+                "indirect_time_debug": debug_indirect,
+                "verbconf_time_debug": debug_verbal,
+            },
+        )
+        return scores, timings
+
+    async def compute_confidence_batch_async(
+        self,
+        parsed_outputs: list[ParsedOutputGeneration],
+        concurrency: int,
+    ) -> list[tuple[ConfidenceScores, ConfidenceTime]]:
+        """Concurrently score API outputs, preserving their input order."""
+        if concurrency < 1:
+            raise ValueError("concurrency must be at least 1")
+        if any(not isinstance(output.answer_token_probs, list) for output in parsed_outputs):
+            raise ValueError("Async confidence scoring supports API/list probabilities only")
+        semaphore = asyncio.Semaphore(concurrency)
+        return list(await asyncio.gather(*(
+            self._compute_confidence_list_probs_async(output, semaphore)
+            for output in parsed_outputs
+        )))
 
 
     def compute_confidence_batch(

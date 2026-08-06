@@ -72,6 +72,38 @@ class GptScorer(ModelScorer):
         }
         return scorer_output, debug_info
 
+    async def forward_indirect_async(
+        self, prompt: list[dict[str, str]], whole_cache: CacheBundle
+    ) -> tuple[ScorerOutput, dict[str, Any]]:
+        llm_outputs: LLMOutput = await self.model.forward_async(prompt)
+        first_token = llm_outputs.outputs.choices[0].logprobs.content[0]
+        scores = {lp.token: lp.logprob for lp in first_token.top_logprobs}
+        scorer_output: ScorerOutput = {
+            "True": torch.tensor(scores.get(ANSWER_TOKENS['gpt_True'][0], float("-inf"))),
+            "False": torch.tensor(scores.get(ANSWER_TOKENS['gpt_False'][0], float("-inf"))),
+        }
+        debug_info = {
+            "first_token": first_token.token,
+            "top_logprobs": {lp.token: lp.logprob for lp in first_token.top_logprobs},
+        }
+        return scorer_output, debug_info
+
+    async def forward_verbal_async(
+        self, prompt: list[dict[str, str]], whole_cache: CacheBundle
+    ) -> tuple[ScorerOutput, dict[str, Any]]:
+        llm_outputs: LLMOutput = await self.model.forward_async(prompt)
+        first_token = llm_outputs.outputs.choices[0].logprobs.content[0]
+        scores = {lp.token: lp.logprob for lp in first_token.top_logprobs}
+        scorer_output: ScorerOutput = {
+            s: torch.tensor(scores.get(s, float("-inf")))
+            for s in ANSWER_TOKENS['gpt_verbal_confidence']
+        }
+        debug_info = {
+            "first_token": first_token.token,
+            "top_logprobs": {lp.token: lp.logprob for lp in first_token.top_logprobs},
+        }
+        return scorer_output, debug_info
+
 
 
 

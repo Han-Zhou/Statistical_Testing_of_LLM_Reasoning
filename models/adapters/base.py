@@ -36,6 +36,14 @@ class ModelScorer(ABC):
         Override in subclass for batch support. Default raises."""
         raise NotImplementedError("Batched confidence scoring not supported for this model")
 
+    async def forward_indirect_async(self, prompt, whole_cache):
+        """Async confidence scoring hook for API-backed models."""
+        raise NotImplementedError("Async indirect confidence scoring not supported for this model")
+
+    async def forward_verbal_async(self, prompt, whole_cache):
+        """Async confidence scoring hook for API-backed models."""
+        raise NotImplementedError("Async verbal confidence scoring not supported for this model")
+
 
 """
 ModelAdapter is the adapter between the runner and the core LLM / API_LLM. 
@@ -170,7 +178,6 @@ class ModelAdapter(ABC):
 
     def scorer(self) -> ModelScorer:
         return self.model_scorer
-
 
 
 

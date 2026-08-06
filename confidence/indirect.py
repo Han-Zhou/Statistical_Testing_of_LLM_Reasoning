@@ -35,3 +35,18 @@ class IndirectConfidenceMethod(ConfidenceMethod):
         scorer_result, debug_info = self.model_scorer.forward_indirect(prompt, parsed_output.whole_cache)
         return self.extract(scorer_result), debug_info
 
+    async def compute_confidence_async(
+        self,
+        parsed_output: ParsedOutputGeneration,
+    ) -> tuple[dict[str, float], dict[str, Any]]:
+        tail = self.tail_prompt(parsed_output.final_answer)
+        if parsed_output.input_messages is not None:
+            prompt = parsed_output.input_messages + [
+                {"role": "assistant", "content": parsed_output.text_cot + tail}
+            ]
+        else:
+            prompt = parsed_output.text_question + parsed_output.text_cot + tail
+        scorer_result, debug_info = await self.model_scorer.forward_indirect_async(
+            prompt, parsed_output.whole_cache
+        )
+        return self.extract(scorer_result), debug_info

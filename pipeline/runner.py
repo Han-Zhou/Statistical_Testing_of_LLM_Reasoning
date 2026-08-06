@@ -260,7 +260,17 @@ class Runner:
         T1 = time.perf_counter()
         stepbootstrap_confidences = []
         stepbootstrap_confidence_times = []
-        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+        if self.generation_config.model == "gpt" and self.generation_config.api_concurrency > 1:
+            batch_results = asyncio.run(
+                self.confidence_engine.compute_confidence_batch_async(
+                    stepbootstrap_generation_outputs,
+                    concurrency=self.generation_config.api_concurrency,
+                )
+            )
+            for confidence, confidence_time in batch_results:
+                stepbootstrap_confidences.append(confidence)
+                stepbootstrap_confidence_times.append(confidence_time)
+        elif self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
             batch_results = self.confidence_engine.compute_confidence_batch(
                 stepbootstrap_generation_outputs,
                 shared_cache=self.context.reference_vanilla_question_cache,
@@ -411,4 +421,3 @@ class Runner:
         
 
         
-

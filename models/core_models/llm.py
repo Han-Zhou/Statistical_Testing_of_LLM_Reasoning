@@ -444,6 +444,13 @@ class LLM():
         cache_mask = torch.ones(N, cache_seq_len, dtype=torch.long, device=self.model.device)
         full_attention_mask = torch.cat([cache_mask, delta_inputs.attention_mask], dim=1)
 
+        # Derive per-row positions from the mask so left-padding does not shift
+        # real delta tokens away from the shared cached prefix. Padding positions
+        # are masked from attention, so their placeholder position is irrelevant.
+        full_position_ids = full_attention_mask.long().cumsum(dim=1) - 1
+        full_position_ids.masked_fill_(full_attention_mask == 0, 1)
+        delta_position_ids = full_position_ids[:, -max_delta_len:]
+
         # Replicate cache along batch dim: each layer's key/value [1, heads, seq, dim] -> [N, heads, seq, dim]
         batched_cache = DynamicCache()
         for layer_idx, layer in enumerate(cache.layers):
@@ -455,6 +462,7 @@ class LLM():
             outputs = self.model(
                 input_ids=delta_inputs.input_ids,
                 attention_mask=full_attention_mask,
+                position_ids=delta_position_ids,
                 past_key_values=batched_cache,
                 use_cache=return_llm_output,
                 return_dict=True,
@@ -480,9 +488,23 @@ class LLM():
                 if outputs.past_key_values is not None:
                     per_seq_cache = DynamicCache()
                     for layer_idx, layer in enumerate(outputs.past_key_values.layers):
-                        # Skip the padding positions in the new part
-                        key = layer.keys[i:i+1, :, :cache_seq_len + (max_delta_len - pad_len), :].contiguous()
-                        value = layer.values[i:i+1, :, :cache_seq_len + (max_delta_len - pad_len), :].contiguous()
+                        # The physical cache is [prefix, left-padding, real delta].
+                        # Compact it to [prefix, real delta] before returning it.
+                        delta_start = cache_seq_len + pad_len
+                        key = torch.cat(
+                            [
+                                layer.keys[i:i+1, :, :cache_seq_len, :],
+                                layer.keys[i:i+1, :, delta_start:, :],
+                            ],
+                            dim=2,
+                        ).contiguous()
+                        value = torch.cat(
+                            [
+                                layer.values[i:i+1, :, :cache_seq_len, :],
+                                layer.values[i:i+1, :, delta_start:, :],
+                            ],
+                            dim=2,
+                        ).contiguous()
                         per_seq_cache.update(key, value, layer_idx)
                 else:
                     per_seq_cache = None

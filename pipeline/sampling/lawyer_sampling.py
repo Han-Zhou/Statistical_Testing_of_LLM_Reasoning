@@ -38,7 +38,7 @@ class LawyerSampling(SamplingMethod):
         # few_shot not implemented yet
         messages = self._build_messages()
 
-        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+        if self.generation_config.batching_enabled:
             return self.context.model_adapter.generate_batch(
                 messages=messages,
                 max_tokens=self.generation_config.max_tokens,
@@ -59,7 +59,3 @@ class LawyerSampling(SamplingMethod):
             generation_outputs.append(generate_output)
 
         return generation_outputs
-
-
-
-        

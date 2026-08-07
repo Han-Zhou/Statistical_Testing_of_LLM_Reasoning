@@ -95,7 +95,7 @@ class StepBootstrapSampling(SamplingMethod):
 
         generation_outputs: list[ParsedOutputGeneration] = []
 
-        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+        if self.generation_config.batching_enabled:
             messages_list = [
                 self._add_assistant_message_to_messages(messages, alternative_cots[i])
                 for i in range(self.sampling_config.nb_stepbootstrap_samples)

@@ -36,7 +36,7 @@ class VLLM_LLM():
         self.tokenizer = AutoTokenizer.from_pretrained(actual_model_name)
 
         hf_overrides =None
-        if self.model_name == "qwen":
+        if self.model_name in {"qwen", "qwen_vllm"}:
             hf_overrides = {"architectures": ["Qwen3_5ForCausalLM"]}
 
         self.model = LLM(

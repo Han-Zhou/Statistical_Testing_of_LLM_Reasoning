@@ -326,6 +326,17 @@ class ConfidenceEngine:
             for output in parsed_outputs
         )))
 
+    @staticmethod
+    def _batch_token_score(token_scores, token_id: int) -> torch.Tensor:
+        """Read one token score from either HF dense logits or vLLM logprobs."""
+        if isinstance(token_scores, dict):
+            value = token_scores.get(token_id, -100.0)
+            # vLLM dictionaries contain Logprob records; tests and other
+            # backends may provide plain numeric values.
+            value = getattr(value, "logprob", value)
+            return torch.as_tensor(value).detach().cpu()
+        return token_scores[token_id].detach().cpu()
+
 
     def compute_confidence_batch(
         self,
@@ -337,7 +348,8 @@ class ConfidenceEngine:
         If shared_cache is provided, uses cache-replicated batching over delta tokens only."""
         from models.adapters.registry import ANSWER_TOKENS
 
-        N = len(parsed_outputs)
+        if not parsed_outputs:
+            return []
         tok = self.model_scorer.model.tokenizer
 
         # Build prompts for indirect and verbal, N each → 2N total
@@ -370,6 +382,11 @@ class ConfidenceEngine:
         t1 = self.time_stamp()
         verbal_last_logits = self.model_scorer.forward_batch_confidence(verbal_prompts, shared_cache=shared_cache)
         t2 = self.time_stamp()
+        if (
+            len(indirect_last_logits) != len(parsed_outputs)
+            or len(verbal_last_logits) != len(parsed_outputs)
+        ):
+            raise RuntimeError("Batch confidence scoring returned an unexpected number of outputs")
         indirect_time = t1 - t0
         verbconf_time = t2 - t1
 
@@ -387,21 +404,20 @@ class ConfidenceEngine:
             # Indirect: logits at position i
             indirect_logits = indirect_last_logits[i]
             scorer_output_indirect = {
-                'True': indirect_logits[true_id].detach().cpu(),
-                'False': indirect_logits[false_id].detach().cpu(),
+                'True': self._batch_token_score(indirect_logits, true_id),
+                'False': self._batch_token_score(indirect_logits, false_id),
             }
             indirect_scores = self.indirect_confidence_method.extract(scorer_output_indirect)
 
             # Verbal: logits at position i
             verbal_logits = verbal_last_logits[i]
             scorer_output_verbal = {
-                s: verbal_logits[tid].detach().cpu()
+                s: self._batch_token_score(verbal_logits, tid)
                 for s, tid in zip(verbal_token_strs, verbal_token_ids)
             }
             verbal_scores = self.verbal_confidence_method.extract(scorer_output_verbal)
 
             # Compute answer token probs/entropy (same as serial path)
-            probs = po.answer_token_probs.detach().cpu()
             answer_probabilities: list[dict[str, float]] = []
             answer_entropy: list[dict[str, float]] = []
             scores_debug: dict = {}
@@ -430,31 +446,66 @@ class ConfidenceEngine:
                     answer_score_probs.append({token_str: float(prob)})
                     answer_score_entropy.append({token_str: float(entropies[j].item())})
 
-            if probs.numel() > 0:
-                ids = po.answer_token_ids.detach().cpu().long()
-                t_a1 = self.time_stamp()
-                selected_probs = probs.gather(-1, ids.unsqueeze(-1)).squeeze(-1)
-                t_a2 = self.time_stamp()
-                probs_for_entropy = probs.double()
-                logprobs_e = torch.nan_to_num(probs_for_entropy.log(), neginf=-99)
-                entropies_e = -torch.sum(probs_for_entropy * logprobs_e, dim=-1)
-                t_a3 = self.time_stamp()
-                answer_prob_time += t_a2 - t_a1
-                answer_ent_time += t_a3 - t_a2
+            if isinstance(po.answer_token_probs, torch.Tensor):
+                probs = po.answer_token_probs.detach().cpu()
+                if probs.numel() > 0:
+                    ids = po.answer_token_ids.detach().cpu().long()
+                    t_a1 = self.time_stamp()
+                    selected_probs = probs.gather(-1, ids.unsqueeze(-1)).squeeze(-1)
+                    t_a2 = self.time_stamp()
+                    probs_for_entropy = probs.double()
+                    logprobs_e = torch.nan_to_num(probs_for_entropy.log(), neginf=-99)
+                    entropies_e = -torch.sum(probs_for_entropy * logprobs_e, dim=-1)
+                    t_a3 = self.time_stamp()
+                    answer_prob_time += t_a2 - t_a1
+                    answer_ent_time += t_a3 - t_a2
 
-                if self.confidence_config.debug_top20:
-                    top_k = min(20, probs.shape[-1])
-                    top_probs, top_ids = torch.topk(probs, k=top_k, dim=-1)
-                    scores_debug["answer_top20_probabilities"] = [
-                        {tok.decode([int(tok_id)]): float(prob)
-                         for tok_id, prob in zip(token_ids, token_probs)}
-                        for token_probs, token_ids in zip(top_probs.tolist(), top_ids.tolist())
-                    ]
+                    if self.confidence_config.debug_top20:
+                        top_k = min(20, probs.shape[-1])
+                        top_probs, top_ids = torch.topk(probs, k=top_k, dim=-1)
+                        scores_debug["answer_top20_probabilities"] = [
+                            {tok.decode([int(tok_id)]): float(prob)
+                             for tok_id, prob in zip(token_ids, token_probs)}
+                            for token_probs, token_ids in zip(top_probs.tolist(), top_ids.tolist())
+                        ]
 
-                for j, (prob, tok_id) in enumerate(zip(selected_probs.tolist(), ids.tolist())):
-                    token_str = tok.decode([int(tok_id)])
-                    answer_probabilities.append({token_str: float(prob)})
-                    answer_entropy.append({token_str: float(entropies_e[j].item())})
+                    for j, (prob, tok_id) in enumerate(zip(selected_probs.tolist(), ids.tolist())):
+                        token_str = tok.decode([int(tok_id)])
+                        answer_probabilities.append({token_str: float(prob)})
+                        answer_entropy.append({token_str: float(entropies_e[j].item())})
+            elif isinstance(po.answer_token_probs, list):
+                answer_top20_probabilities = (
+                    [] if self.confidence_config.debug_top20 else None
+                )
+                raw_probs_per_pos = po.answer_token_probs
+                is_vllm = bool(raw_probs_per_pos) and isinstance(raw_probs_per_pos[0], dict)
+                for token_str, raw_entry in zip(po.answer_token_ids, raw_probs_per_pos):
+                    t_a1 = self.time_stamp()
+                    if is_vllm:
+                        probs_by_token = self._normalize_vllm_logprobs(raw_entry)
+                    else:
+                        probs_by_token = self._normalize_openai_logprobs(raw_entry)
+                    sampled_prob = probs_by_token.get(token_str, 0.0)
+                    t_a2 = self.time_stamp()
+                    entropy = -sum(
+                        prob * math.log(prob)
+                        for prob in probs_by_token.values()
+                        if prob > 0.0
+                    )
+                    t_a3 = self.time_stamp()
+                    answer_prob_time += t_a2 - t_a1
+                    answer_ent_time += t_a3 - t_a2
+                    answer_probabilities.append({token_str: sampled_prob})
+                    answer_entropy.append({token_str: entropy})
+                    if answer_top20_probabilities is not None:
+                        answer_top20_probabilities.append(probs_by_token)
+                if answer_top20_probabilities is not None:
+                    scores_debug["answer_top20_probabilities"] = answer_top20_probabilities
+            else:
+                raise ValueError(
+                    "Unsupported answer_token_probs type in batch: "
+                    f"{type(po.answer_token_probs)}"
+                )
 
             confidence_scores = ConfidenceScores(
                 answer_probabilities=answer_probabilities,

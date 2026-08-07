@@ -141,7 +141,7 @@ class Runner:
         T1 = time.perf_counter()
         rejection_confidences = []
         rejection_confidence_times = []
-        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+        if self.generation_config.batching_enabled:
             batch_results = self.confidence_engine.compute_confidence_batch(
                 rejection_generation_outputs,
                 shared_cache=self.context.reference_vanilla_question_cache,
@@ -197,7 +197,7 @@ class Runner:
         T1 = time.perf_counter()
         lawyer_confidences = []
         lawyer_confidence_times = []
-        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+        if self.generation_config.batching_enabled:
             batch_results = self.confidence_engine.compute_confidence_batch(
                 lawyer_generation_outputs,
                 shared_cache=self.context.reference_vanilla_question_cache,
@@ -270,7 +270,7 @@ class Runner:
             for confidence, confidence_time in batch_results:
                 stepbootstrap_confidences.append(confidence)
                 stepbootstrap_confidence_times.append(confidence_time)
-        elif self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+        elif self.generation_config.batching_enabled:
             batch_results = self.confidence_engine.compute_confidence_batch(
                 stepbootstrap_generation_outputs,
                 shared_cache=self.context.reference_vanilla_question_cache,

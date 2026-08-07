@@ -32,7 +32,7 @@ class RejectionSampling(SamplingMethod):
             prompt_request=PromptRequest(few_shot=False, prompt_type=self.generation_config.prompt_type),
         )
 
-        if self.generation_config.experimental_llama_batch and self.generation_config.model == "llama":
+        if self.generation_config.batching_enabled:
             return self.context.model_adapter.generate_batch(
                 messages=messages,
                 max_tokens=self.generation_config.max_tokens,

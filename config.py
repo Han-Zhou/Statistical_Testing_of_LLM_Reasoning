@@ -23,6 +23,11 @@ class GenerationConfig:
     api_datapoint_retries: int = 3
     api_retry_initial_delay: float = 5.0
 
+    @property
+    def batching_enabled(self) -> bool:
+        """Whether this model has opted into its experimental batch path."""
+        return self.experimental_llama_batch and self.model in {"llama", "qwen_vllm"}
+
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "GenerationConfig":
         return cls(
@@ -87,7 +92,6 @@ class SamplingConfig:
             nb_stepbootstrap_samples=args.nb_stepbootstrap_samples,
             seed_stepbootstrap=args.seed_stepbootstrap,
         )
-
 
 
 

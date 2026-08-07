@@ -38,10 +38,16 @@ def parse():
         help="Experimental: use CUDA stream synchronization for timing.",
     )
     args.add_argument(
+        "--experimental_batch",
         "--experimental_llama_batch",
+        dest="experimental_llama_batch",
         action="store_true",
         default=False,
-        help="Experimental: batch generation and forward passes for Llama (rejection/lawyer/stepbootstrap).",
+        help=(
+            "Experimental: batch generation, confidence scoring, and forward "
+            "passes for Llama or Qwen vLLM. --experimental_llama_batch is a "
+            "backward-compatible alias."
+        ),
     )
     args.add_argument(
         "--api_concurrency",
@@ -195,10 +201,21 @@ def check_args(args: argparse.Namespace):
     """
     Checks for logical inconsistencies in the arguments.
     """
-    if args.model == "gpt" and args.backend != "api":
-        raise ValueError("GPT model only supports API backend")
-    if (args.model == "llama" or args.model == "qwen") and args.backend != "hf":
-        raise ValueError("Llama or Qwen model only supports Hugginface backend")
+    required_backends = {
+        "gpt": "api",
+        "llama": "hf",
+        "qwen": "hf",
+        "qwen_vllm": "vllm",
+    }
+    required_backend = required_backends[args.model]
+    if args.backend != required_backend:
+        raise ValueError(
+            f"{args.model} only supports the {required_backend} backend"
+        )
+    if args.experimental_llama_batch and args.model not in {"llama", "qwen_vllm"}:
+        raise ValueError(
+            "--experimental_batch is only supported for llama and qwen_vllm"
+        )
     if args.api_datapoint_retries < 0:
         raise ValueError("--api_datapoint_retries must be non-negative")
     if args.api_retry_initial_delay < 0:

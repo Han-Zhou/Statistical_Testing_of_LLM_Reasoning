@@ -1,13 +1,10 @@
 import re
-import copy
 import math
 
-from typing import Optional, Tuple
+from typing import Optional, Protocol, Tuple
 
-from transformers.utils import ModelOutput
 from vllm import RequestOutput, SamplingParams
 from vllm.outputs import CompletionOutput
-from vllm.logprobs import Logprob
 
 from domain import LLMOutput, ParsedOutputGeneration, KVCache, CacheBundle, AnswerSpan, ScorerOutput, ListAnswerTokenProbs
 from models.adapters.base import ModelAdapter, ModelScorer
@@ -16,8 +13,13 @@ from models.adapters.registry import  ANSWER_TOKENS
 from models.adapters.shared_utils import _locate_answer_span, _char_to_token_idx
 
 
-import torch.nn.functional as F
 import torch
+
+
+class LogprobLike(Protocol):
+    """vLLM log-probability record across supported vLLM versions."""
+
+    logprob: float
 
 
 QWEN_STOP_STRINGS = [
@@ -42,16 +44,38 @@ class QwenVllmScorer(ModelScorer):
     def __init__(self, model: VLLM_LLM):
         self.model = model
 
-    def _next_token_logprobs(self, prompt: str) -> dict[int, Logprob]:
+    def _next_token_logprobs(self, prompt: str) -> dict[int, LogprobLike]:
         """Generate 1 token to get the next-token distribution after the prompt."""
+        return self._batch_next_token_logprobs([prompt])[0]
+
+    def _batch_next_token_logprobs(
+        self,
+        prompts: list[str],
+    ) -> list[dict[int, LogprobLike]]:
+        """Get next-token log probabilities for a vLLM prompt batch."""
+        if not prompts:
+            return []
         sampling = SamplingParams(
             temperature=0.0,
             max_tokens=1,
             logprobs=20,
             skip_special_tokens=False,
         )
-        outputs: list[RequestOutput] = self.model.model.generate([prompt], sampling)
-        return outputs[0].outputs[0].logprobs[0]
+        outputs: list[RequestOutput] = self.model.model.generate(prompts, sampling)
+        return [output.outputs[0].logprobs[0] for output in outputs]
+
+    def forward_batch_confidence(
+        self,
+        prompts: list[str],
+        shared_cache: CacheBundle | None = None,
+    ) -> list[dict[int, LogprobLike]]:
+        """Return one sparse next-token log-probability map per prompt.
+
+        vLLM schedules the prompt list as a batch and manages its own prefix
+        cache, so the HF ``shared_cache`` object is intentionally ignored.
+        """
+        del shared_cache
+        return self._batch_next_token_logprobs(prompts)
 
     def forward_indirect(self, prompt: str, whole_cache: CacheBundle = None) -> tuple[ScorerOutput, dict]:
         """
@@ -206,7 +230,7 @@ class QwenVllmAdapter(ModelAdapter):
             assert(len(outputs.outputs) == 1)
             completion_output: CompletionOutput = outputs.outputs[0]
 
-            all_raw_logprobs: list[dict[int, Logprob]] = completion_output.logprobs
+            all_raw_logprobs: list[dict[int, LogprobLike]] = completion_output.logprobs
 
             # shape of all_probs: [num_generated_tokens, retrieved_vocab_size=20]
             all_probs: ListAnswerTokenProbs = []
@@ -303,6 +327,34 @@ class QwenVllmAdapter(ModelAdapter):
         prompt_text = self.render_prompt(messages)
         cleaned_texts, forward_outputs = self.generate_helper(prompt_text, max_tokens, cache, temperature)
         return self._process_forward_output(cleaned_texts[0], forward_outputs[0])
+
+    def generate_batch(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        cache: CacheBundle | None = None,
+        temperature: float = 0.0,
+        num_sequences: int = 1,
+    ) -> list[ParsedOutputGeneration]:
+        """Generate N Qwen trajectories through batched vLLM requests."""
+        if num_sequences < 1:
+            raise ValueError("num_sequences must be at least 1")
+        prompt_text = self.render_prompt(messages)
+        cleaned_texts, forward_outputs = self.generate_helper(
+            prompt_text,
+            max_tokens,
+            cache,
+            temperature,
+            n=num_sequences,
+        )
+        if len(cleaned_texts) != num_sequences or len(forward_outputs) != num_sequences:
+            raise RuntimeError(
+                "Qwen vLLM batch generation returned an unexpected number of outputs"
+            )
+        return [
+            self._process_forward_output(text, output)
+            for text, output in zip(cleaned_texts, forward_outputs)
+        ]
 
 
     def generate_helper(
@@ -463,3 +515,26 @@ class QwenVllmAdapter(ModelAdapter):
         prompt_text = self.render_prompt(messages)
         request_outputs = self.forward_pass_helper(prompt_text, cache)
         return self._process_forward_output(prompt_text, request_outputs[0])
+
+    def forward_pass_batch(
+        self,
+        messages_list: list[list[dict[str, str]]],
+        cache: CacheBundle | None = None,
+    ) -> list[ParsedOutputGeneration]:
+        """Score N completed Qwen prompts in one vLLM forward batch."""
+        del cache  # vLLM owns prefix-cache management.
+        prompts = [self.render_prompt(messages) for messages in messages_list]
+        if not prompts:
+            return []
+        request_outputs = self.model.forward(
+            prompts=prompts,
+            return_llm_output=False,
+        )
+        if len(request_outputs) != len(prompts):
+            raise RuntimeError(
+                "Qwen vLLM batch forward returned an unexpected number of outputs"
+            )
+        return [
+            self._process_forward_output(prompt, output)
+            for prompt, output in zip(prompts, request_outputs)
+        ]

@@ -45,6 +45,10 @@ class Runner:
         adapter_cls = MODEL_ADAPTER_REGISTRY[self.generation_config.model]
         if self.generation_config.model == "llama":
             self.model_adapter = adapter_cls(debug_nocache=self.generation_config.debug_nocache)
+        elif self.generation_config.model == "qwen_vllm":
+            self.model_adapter = adapter_cls(
+                vllm_base_url=self.generation_config.vllm_base_url
+            )
         else:
             self.model_adapter = adapter_cls()
 

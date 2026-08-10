@@ -57,15 +57,15 @@ class StepBootstrapSampling(SamplingMethod):
         """
         adds the alternative_cots to the messages
         also:
-        - if hf backend, adds the answer to the messages
-        - if api backend, do NOT add the answer to the messages
+        - for local backends, adds the answer so a forward pass can score it
+        - for the API backend, leaves the answer open for generation
         Does NOT mutatate the original messages
         """
         new_messages = [message.copy() for message in messages]
-        if self.generation_config.backend == "hf":
-            final_answer_sentence = f"\nTherefore the final answer is \\boxed{{{self.context.reference_vanilla_final_answer}}}."
-        else:
+        if self.generation_config.backend == "api":
             final_answer_sentence = f"\nTherefore the final answer is \\boxed{{"
+        else:
+            final_answer_sentence = f"\nTherefore the final answer is \\boxed{{{self.context.reference_vanilla_final_answer}}}."
         if self.generation_config.prompt_type == 1:
             # we append to the end  - the assistant prefill is already there
             new_messages[-1]["content"] += f"\n{alternative_cot}{final_answer_sentence}"

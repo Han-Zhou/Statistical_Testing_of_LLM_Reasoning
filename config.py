@@ -22,6 +22,7 @@ class GenerationConfig:
     api_concurrency: int = 1
     api_datapoint_retries: int = 3
     api_retry_initial_delay: float = 5.0
+    vllm_base_url: str | None = None
 
     @property
     def batching_enabled(self) -> bool:
@@ -34,6 +35,7 @@ class GenerationConfig:
             model=args.model,
             dataset=args.dataset,
             backend=args.backend,
+            vllm_base_url=getattr(args, "vllm_base_url", None),
             prompt_type=args.prompt_type,
             max_tokens=args.max_tokens,
             sample_size=args.sample_size,
@@ -92,6 +94,3 @@ class SamplingConfig:
             nb_stepbootstrap_samples=args.nb_stepbootstrap_samples,
             seed_stepbootstrap=args.seed_stepbootstrap,
         )
-
-
-

@@ -25,6 +25,16 @@ def parse():
         help="Backend for model inference. Hugginface or API (only openAI for now)",
     )
     args.add_argument(
+        "--vllm_base_url",
+        type=str,
+        default=None,
+        help=(
+            "Use an already-running OpenAI-compatible vLLM server for Qwen "
+            "instead of initializing vLLM in this process. For example: "
+            "http://127.0.0.1:8000"
+        ),
+    )
+    args.add_argument(
         "--confidence",
         type=str,
         default="none",
@@ -216,6 +226,8 @@ def check_args(args: argparse.Namespace):
         raise ValueError(
             "--experimental_batch is only supported for llama and qwen_vllm"
         )
+    if getattr(args, "vllm_base_url", None) is not None and args.model != "qwen_vllm":
+        raise ValueError("--vllm_base_url is only supported with --model qwen_vllm")
     if args.api_datapoint_retries < 0:
         raise ValueError("--api_datapoint_retries must be non-negative")
     if args.api_retry_initial_delay < 0:

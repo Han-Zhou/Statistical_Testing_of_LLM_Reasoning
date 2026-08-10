@@ -14,7 +14,8 @@ python3 main.py \
     --nb_cot_samples 2 \
     --nb_stepbootstrap_samples 2 \
     --temperature 0.9 \
-    --tag test-807-qwen_vllm \
+    --tag test-810-qwen_vllm \
     --experimental_batch \
+    --vllm_base_url http://127.0.0.1:8000 \
     --debug_top20
 

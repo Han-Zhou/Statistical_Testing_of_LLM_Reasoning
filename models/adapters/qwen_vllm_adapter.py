@@ -117,8 +117,8 @@ Some remarks:
 - cache slicing does not work for Qwen3_5DynamicCache. For generation on question_cache and whole_cache, we just run a forward pass.
 """
 class QwenVllmAdapter(ModelAdapter):
-    def __init__(self):
-        self.model = VLLM_LLM(model_name="qwen")
+    def __init__(self, vllm_base_url: str | None = None):
+        self.model = VLLM_LLM(model_name="qwen", base_url=vllm_base_url)
         self.model_scorer = QwenVllmScorer(self.model)
 
 

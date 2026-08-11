@@ -55,7 +55,8 @@ def parse():
         default=False,
         help=(
             "Experimental: batch generation, confidence scoring, and forward "
-            "passes for Llama or Qwen vLLM. --experimental_llama_batch is a "
+            "passes for Llama, Qwen HF, or Qwen vLLM. "
+            "--experimental_llama_batch is a "
             "backward-compatible alias."
         ),
     )
@@ -222,9 +223,13 @@ def check_args(args: argparse.Namespace):
         raise ValueError(
             f"{args.model} only supports the {required_backend} backend"
         )
-    if args.experimental_llama_batch and args.model not in {"llama", "qwen_vllm"}:
+    if args.experimental_llama_batch and args.model not in {
+        "llama",
+        "qwen",
+        "qwen_vllm",
+    }:
         raise ValueError(
-            "--experimental_batch is only supported for llama and qwen_vllm"
+            "--experimental_batch is only supported for llama, qwen, and qwen_vllm"
         )
     if getattr(args, "vllm_base_url", None) is not None and args.model != "qwen_vllm":
         raise ValueError("--vllm_base_url is only supported with --model qwen_vllm")

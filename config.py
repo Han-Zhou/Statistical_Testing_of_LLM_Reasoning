@@ -27,7 +27,11 @@ class GenerationConfig:
     @property
     def batching_enabled(self) -> bool:
         """Whether this model has opted into its experimental batch path."""
-        return self.experimental_llama_batch and self.model in {"llama", "qwen_vllm"}
+        return self.experimental_llama_batch and self.model in {
+            "llama",
+            "qwen",
+            "qwen_vllm",
+        }
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "GenerationConfig":

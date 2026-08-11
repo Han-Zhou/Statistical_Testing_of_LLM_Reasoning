@@ -307,9 +307,16 @@ class LLM():
         self,
         prompts: list[str],
         return_llm_output: bool = False,
+        return_cache: bool = True,
     ) -> list:
         """Batched forward pass over N prompts. Left-pads, no cache.
-        Returns list of N LLMOutput (if return_llm_output) or list of per-sequence ModelOutput-like namespaces."""
+        Returns list of N LLMOutput (if return_llm_output) or list of
+        per-sequence ModelOutput-like namespaces.
+
+        Set ``return_cache=False`` for models with cache types that cannot be
+        losslessly split into per-sequence ``DynamicCache`` objects (notably
+        Qwen3.5's hybrid attention/recurrent cache).
+        """
         logger.info(f"Batched forward ({len(prompts)} prompts) with model {self.model_name}")
 
         self.tokenizer.padding_side = "left"
@@ -325,7 +332,7 @@ class LLM():
             outputs = self.model(
                 input_ids=inputs.input_ids,
                 attention_mask=inputs.attention_mask,
-                use_cache=return_llm_output,
+                use_cache=return_llm_output and return_cache,
                 return_dict=True,
             )
         # outputs.logits: [N, max_len, vocab]
@@ -350,7 +357,7 @@ class LLM():
 
             if return_llm_output:
                 # Extract per-sequence cache
-                if outputs.past_key_values is not None:
+                if return_cache and outputs.past_key_values is not None:
                     per_seq_cache = DynamicCache()
                     for layer_idx, layer in enumerate(outputs.past_key_values.layers):
                         key = layer.keys[i:i+1, :, pad_len:, :].contiguous()

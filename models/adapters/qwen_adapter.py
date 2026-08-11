@@ -39,7 +39,11 @@ class QwenScorer(ModelScorer):
     def __init__(self, model: LLM):
         self.model = model
 
-    def forward_indirect(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
+    def forward_indirect(
+        self,
+        prompt: str,
+        whole_cache: CacheBundle,
+    ) -> tuple[ScorerOutput, dict]:
         """
         forward_indirect runs a forward pass on the prompt with indirect suffix, and returns the logitsfor the indirect tokens. These are 'True' and 'False' tokens generated last
         """
@@ -52,13 +56,18 @@ class QwenScorer(ModelScorer):
         true_id = tok(ANSWER_TOKENS[' True'][0], add_special_tokens=False).input_ids[0]
         false_id = tok(ANSWER_TOKENS[' False'][0], add_special_tokens=False).input_ids[0]
 
-        return {
+        scores = {
             'True': last_logits[true_id].detach().cpu(),
             'False': last_logits[false_id].detach().cpu(),
         }
+        return scores, {}
 
 
-    def forward_verbal(self, prompt: str, whole_cache: CacheBundle) -> ScorerOutput:
+    def forward_verbal(
+        self,
+        prompt: str,
+        whole_cache: CacheBundle,
+    ) -> tuple[ScorerOutput, dict]:
         """
         forward_verbal runs a forward pass on the prompt with verbal suffix, and returns the logits for the verbal tokens. These are the tokens generated last.
         For llama, we are lucky such that every integer [0, 100] has its own token, so we only need one forward pass
@@ -69,10 +78,29 @@ class QwenScorer(ModelScorer):
         last_logits = outputs.logits[0, -1, :]
 
         tok = self.model.tokenizer
-        return {
+        scores = {
             s: last_logits[tok(s, add_special_tokens=False).input_ids[0]].detach().cpu()
             for s in ANSWER_TOKENS['llama_verbal_confidence']
         }
+        return scores, {}
+
+    def forward_batch_confidence(
+        self,
+        prompts: list[str],
+        shared_cache: CacheBundle | None = None,
+    ) -> list[torch.Tensor]:
+        """Return next-token logits for a batch of full Qwen prompts.
+
+        Qwen3.5's hybrid cache contains recurrent linear-attention state that
+        cannot be cropped or reconstructed as a regular ``DynamicCache``. The
+        batch path therefore recomputes the full prompts instead of attempting
+        unsafe shared-cache replication.
+        """
+        del shared_cache
+        if not prompts:
+            return []
+        all_last_logits = self.model.forward_batch_last_logits(prompts)
+        return [all_last_logits[i] for i in range(all_last_logits.shape[0])]
 
 
 """
@@ -95,7 +123,23 @@ class QwenAdapter(ModelAdapter):
                 return text[:-len(special_tok)], True
         return text, False
 
-    def _extract_cot(self, output_text: str, output_tokens: list[str], offset_mappings: list[tuple[int, int]], cache: KVCache, sequence_ids: torch.Tensor, cot_start_idx: int, answer_span: AnswerSpan | None) -> tuple[list[str], str, str, str, KVCache, CacheBundle]:
+    def _extract_cot(
+        self,
+        output_text: str,
+        output_tokens: list[str],
+        offset_mappings: list[tuple[int, int]],
+        cache: KVCache | None,
+        sequence_ids: torch.Tensor,
+        cot_start_idx: int,
+        answer_span: AnswerSpan | None,
+    ) -> tuple[
+        list[str],
+        str,
+        str,
+        str,
+        CacheBundle | None,
+        CacheBundle | None,
+    ]:
         # text_cot_with_answer contains basically everything after the "assistant" header
         text_cot_with_answer = output_text[cot_start_idx:]
         text_question = output_text[:cot_start_idx]
@@ -126,20 +170,27 @@ class QwenAdapter(ModelAdapter):
                 cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
 
 
-        # to get the question cache, we need to run a forward pass on the question part of the prompt
-
-        question_outputs: LLMOutput = self.model.forward(
-            prompt=text_question,
-            return_llm_output=True,
-        )
-        question_cache = CacheBundle(
-            cache=question_outputs.outputs.past_key_values,
-            input_ids=question_outputs.outputs.sequences[0].detach().cpu().clone(),
-        )
-        whole_cache = CacheBundle(
-            cache=copy.deepcopy(cache),
-            input_ids=sequence_ids[:cache.get_seq_length()].detach().cpu().clone(),
-        )
+        # Serial vanilla generation returns a cache and needs a question cache
+        # for the later sampling stages. Batched perturbation outputs deliberately
+        # omit caches because Qwen's hybrid cache cannot be safely unbatched. Those
+        # outputs are terminal and the runner supplies vanilla's shared question
+        # cache separately for confidence scoring, so no per-output cache is needed.
+        if cache is None:
+            whole_cache = None
+            question_cache = None
+        else:
+            question_outputs: LLMOutput = self.model.forward(
+                prompt=text_question,
+                return_llm_output=True,
+            )
+            question_cache = CacheBundle(
+                cache=question_outputs.outputs.past_key_values,
+                input_ids=question_outputs.outputs.sequences[0].detach().cpu().clone(),
+            )
+            whole_cache = CacheBundle(
+                cache=copy.deepcopy(cache),
+                input_ids=sequence_ids[:cache.get_seq_length()].detach().cpu().clone(),
+            )
 
         return cot_steps, text_question, text_cot, text_cot_with_answer, whole_cache, question_cache
 
@@ -358,3 +409,162 @@ class QwenAdapter(ModelAdapter):
             cache=cache,
             return_llm_output=return_llm_output,
         )
+
+    def generate_batch(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        cache: CacheBundle | None = None,
+        temperature: float = 0.0,
+        num_sequences: int = 1,
+    ) -> list[ParsedOutputGeneration]:
+        """Generate N Qwen trajectories without aligning the hybrid cache."""
+        del cache
+        prompt = self.render_prompt(messages)
+        outputs = self.generate_batch_helper(
+            prompt=prompt,
+            max_tokens=max_tokens,
+            cache=None,
+            temperature=temperature,
+            num_sequences=num_sequences,
+        )
+        return [self.process_generation_output(output) for output in outputs]
+
+    def forward_pass_batch(
+        self,
+        messages_list: list[list[dict[str, str]]],
+        cache: CacheBundle | None = None,
+    ) -> list[ParsedOutputGeneration]:
+        """Teacher-force N Qwen prompts without aligning the hybrid cache."""
+        del cache
+        prompts = [self.render_prompt(messages) for messages in messages_list]
+        outputs = self.forward_pass_batch_helper(prompts)
+        return [self.process_generation_output(output) for output in outputs]
+
+    def generate_batch_helper(
+        self,
+        prompt: str,
+        max_tokens: int,
+        cache: KVCache | None,
+        temperature: float,
+        num_sequences: int,
+    ) -> list[LLMOutput]:
+        """Run Qwen's three generation phases for N trajectories in batches.
+
+        All phases use full prompts. In particular, ``cache`` is intentionally
+        ignored: Qwen3.5's hybrid cache includes constant-shape recurrent state
+        and cannot be replicated by the key/value-only HF cache helpers.
+        """
+        if num_sequences < 1:
+            raise ValueError("num_sequences must be at least 1")
+        del cache
+
+        # Phase 1: sample N thinking continuations from the same prompt.
+        phase_1_raw = self.model.generate_multi_sequence(
+            prompt=prompt,
+            max_tokens=max_tokens,
+            cache=None,
+            temperature=temperature,
+            num_sequences=num_sequences,
+            stop_strings=["</think>"],
+        )
+        phase_1_texts = [
+            self.model.tokenizer.decode(
+                self._truncate_trailing_eos(phase_1_raw.sequences[i]),
+                skip_special_tokens=False,
+            )
+            for i in range(num_sequences)
+        ]
+        del phase_1_raw
+
+        # Phase 2: continue each thinking sample with a separately padded CoT
+        # prompt, while HF executes the prompts in one model.generate call.
+        phase_2_prompts = [
+            text + "Let's think step by step. \nStep 1: "
+            for text in phase_1_texts
+        ]
+        phase_2_raw = self.model.generate_batch(
+            prompts=phase_2_prompts,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop_strings=QWEN_STOP_STRINGS,
+        )
+        phase_2_texts = self._decode_left_padded_sequences(
+            phase_2_raw.sequences,
+            phase_2_prompts,
+        )
+        del phase_2_raw
+
+        phase_3_prompts = []
+        for text in phase_2_texts:
+            cleaned_text, _ = self._strip_trailing_special_token(text)
+            phase_3_prompts.append(cleaned_text + "\nThe answer is \\boxed{")
+
+        # Phase 3: generate each final answer in one multi-prompt batch.
+        phase_3_raw = self.model.generate_batch(
+            prompts=phase_3_prompts,
+            max_tokens=200,
+            temperature=temperature,
+        )
+        phase_3_texts = self._decode_left_padded_sequences(
+            phase_3_raw.sequences,
+            phase_3_prompts,
+        )
+        del phase_3_raw
+        cleaned_texts = [
+            re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+            for text in phase_3_texts
+        ]
+
+        # Re-forward the cleaned texts to align full-prompt logits with token
+        # offsets. Do not ask the core wrapper to split Qwen's hybrid cache.
+        return self.model.forward_batch(
+            cleaned_texts,
+            return_llm_output=True,
+            return_cache=False,
+        )
+
+    def forward_pass_batch_helper(
+        self,
+        prompts: list[str],
+        cache: KVCache | None = None,
+        cache_seq_len: int = 0,
+    ) -> list[LLMOutput]:
+        """Teacher-force N full Qwen prompts without hybrid-cache reuse."""
+        del cache, cache_seq_len
+        if not prompts:
+            return []
+        return self.model.forward_batch(
+            prompts,
+            return_llm_output=True,
+            return_cache=False,
+        )
+
+    def _decode_left_padded_sequences(
+        self,
+        sequences: torch.Tensor,
+        prompts: list[str],
+    ) -> list[str]:
+        """Remove left prompt padding and trailing EOS generation padding."""
+        prompt_lengths = [
+            len(self.model.tokenizer(p, add_special_tokens=False).input_ids)
+            for p in prompts
+        ]
+        max_prompt_length = max(prompt_lengths)
+        texts = []
+        for i, prompt_length in enumerate(prompt_lengths):
+            left_padding = max_prompt_length - prompt_length
+            sequence = sequences[i, left_padding:]
+            sequence = self._truncate_trailing_eos(sequence)
+            texts.append(
+                self.model.tokenizer.decode(sequence, skip_special_tokens=False)
+            )
+        return texts
+
+    def _truncate_trailing_eos(self, sequence: torch.Tensor) -> torch.Tensor:
+        """Remove EOS tokens used to right-pad completed batched generations."""
+        eos_id = self.model.tokenizer.eos_token_id
+        non_eos = sequence.ne(eos_id).nonzero(as_tuple=False)
+        if non_eos.numel() == 0:
+            return sequence
+        return sequence[:non_eos[-1].item() + 1]

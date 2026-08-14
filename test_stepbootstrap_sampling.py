@@ -9,20 +9,20 @@ from pipeline.sampling.stepbootstrap_sampling import StepBootstrapSampling, _res
 class _StubRng:
     def choice(self, population_size, size, replace):
         self.call = (population_size, size, replace)
-        return np.array([3, 1, 1, 0])
+        return np.array([4, 1, 4, 0, 1])
 
 
 class StepBootstrapResamplingTest(unittest.TestCase):
-    def test_resampling_preserves_original_order_and_final_step(self):
+    def test_resampling_includes_final_step_and_preserves_original_order(self):
         steps = ["step 0", "step 1", "step 2", "step 3", "final step"]
         rng = _StubRng()
 
         result = _resample_steps(steps, rng)
 
-        self.assertEqual(rng.call, (4, 4, True))
+        self.assertEqual(rng.call, (5, 5, True))
         self.assertEqual(
             result,
-            ["step 0", "step 1", "step 1", "step 3", "final step"],
+            ["step 0", "step 1", "step 1", "final step", "final step"],
         )
 
     def test_single_step_is_returned_unchanged(self):

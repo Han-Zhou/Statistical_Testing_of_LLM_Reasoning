@@ -1,8 +1,9 @@
 import logging
 import copy
+import gc
 from types import SimpleNamespace
 import torch
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from dotenv import load_dotenv
 
 
@@ -21,30 +22,163 @@ from models.core_models.registry import MODEL_HF_REGISTRY
 load_dotenv()
 logger = logging.getLogger(__name__)
 
+
+def _correct_qwen_fp8_skip_modules(quantization_config: Any) -> int:
+    """Remove the Qwen FP8 exclusion that also matches ``gate_proj``.
+
+    Transformers treats ``modules_to_not_convert`` entries as unanchored
+    matches. A trailing ``.mlp.gate`` entry therefore unintentionally excludes
+    ``.mlp.gate_proj`` and prevents its FP8 scale tensor from being consumed.
+    The checkpoint may expose its quantization config as either a dictionary or
+    a Transformers config object, so support both representations explicitly.
+    """
+    if quantization_config is None:
+        raise RuntimeError(
+            "Qwen FP8 checkpoint is missing its quantization_config metadata."
+        )
+
+    if isinstance(quantization_config, dict):
+        skip_modules = quantization_config.get("modules_to_not_convert", [])
+    else:
+        if not hasattr(quantization_config, "modules_to_not_convert"):
+            raise RuntimeError(
+                "Qwen FP8 quantization_config has no modules_to_not_convert field."
+            )
+        skip_modules = quantization_config.modules_to_not_convert
+
+    if skip_modules is None:
+        skip_modules = []
+    if not isinstance(skip_modules, (list, tuple)) or not all(
+        isinstance(name, str) for name in skip_modules
+    ):
+        raise RuntimeError(
+            "Qwen FP8 modules_to_not_convert must be a list of module names."
+        )
+
+    corrected_skip_modules = [
+        name for name in skip_modules if not name.endswith(".mlp.gate")
+    ]
+    if isinstance(quantization_config, dict):
+        quantization_config["modules_to_not_convert"] = corrected_skip_modules
+    else:
+        quantization_config.modules_to_not_convert = corrected_skip_modules
+
+    return len(skip_modules) - len(corrected_skip_modules)
+
+
+def _validate_qwen_fp8_loading_info(loading_info: Any) -> None:
+    """Refuse inference if Transformers rejected any FP8 scale tensors."""
+    if not isinstance(loading_info, dict):
+        raise RuntimeError("Qwen FP8 loader returned malformed loading information.")
+
+    rejected_scale_keys = []
+    for category in ("unexpected_keys", "missing_keys", "mismatched_keys"):
+        entries = loading_info.get(category, [])
+        if entries is None:
+            entries = []
+        if not isinstance(entries, (list, tuple, set, frozenset)):
+            raise RuntimeError(
+                f"Qwen FP8 loading information has malformed {category}."
+            )
+        for entry in entries:
+            key = entry[0] if isinstance(entry, (list, tuple)) and entry else entry
+            if isinstance(key, str) and "weight_scale_inv" in key:
+                rejected_scale_keys.append(f"{category}: {key}")
+
+    if rejected_scale_keys:
+        examples = "\n".join(rejected_scale_keys[:10])
+        raise RuntimeError(
+            "FP8 scale tensors were not loaded correctly; refusing to run "
+            f"corrupted inference. Examples:\n{examples}"
+        )
+
 class LLM():
 
-    def __init__(self, model_name: str, attention_implementation: str, debug_nocache: bool = False):
+    def __init__(self, model_name: str, attention_implementation: str | None, debug_nocache: bool = False):
         self.model_name = model_name
         self.attention_implementation = attention_implementation
         self.debug_nocache = debug_nocache
         self._load_model(attention_implementation)
 
 
-    def _load_model(self, attention_implementation: str):
+    def _load_model(self, attention_implementation: str | None):
         # Load the model based on the model name
         logger.info(f"Loading LLM model: {self.model_name}")
         actual_model_name = MODEL_HF_REGISTRY.get(self.model_name)
         if not actual_model_name:
             raise ValueError(f"Model {self.model_name} not found in registry.")
     
-        self.tokenizer = AutoTokenizer.from_pretrained(actual_model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            actual_model_name,
-            device_map="auto",
-            dtype=torch.bfloat16,
-            attn_implementation=attention_implementation,
-        )
+        if self.model_name == "qwen_fp8":
+            self._load_qwen_fp8_model(actual_model_name)
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(actual_model_name)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                actual_model_name,
+                device_map="auto",
+                dtype=torch.bfloat16,
+                attn_implementation=attention_implementation,
+            )
         logger.info(f"Model {self.model_name} loaded successfully.")
+
+    def _load_qwen_fp8_model(self, actual_model_name: str) -> None:
+        """Load Qwen3.6 FP8 through its declared multimodal architecture."""
+        if not torch.cuda.is_available():
+            raise RuntimeError("Qwen3.6-27B-FP8 requires a CUDA GPU.")
+
+        try:
+            from transformers import AutoConfig, Qwen3_5ForConditionalGeneration
+        except ImportError as exc:
+            raise RuntimeError(
+                "Qwen3.6-27B-FP8 requires a Transformers version that exposes "
+                "Qwen3_5ForConditionalGeneration."
+            ) from exc
+
+        config = AutoConfig.from_pretrained(
+            actual_model_name,
+            trust_remote_code=True,
+        )
+        removed_count = _correct_qwen_fp8_skip_modules(
+            getattr(config, "quantization_config", None)
+        )
+        logger.info(
+            "Removed %d erroneous `.mlp.gate` Qwen FP8 exclusions",
+            removed_count,
+        )
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            actual_model_name,
+            trust_remote_code=True,
+        )
+        self.model, loading_info = Qwen3_5ForConditionalGeneration.from_pretrained(
+            actual_model_name,
+            config=config,
+            device_map="auto",
+            dtype="auto",
+            output_loading_info=True,
+            trust_remote_code=True,
+        )
+        _validate_qwen_fp8_loading_info(loading_info)
+        self.model.eval()
+
+        model_body = getattr(self.model, "model", None)
+        if model_body is None or not hasattr(model_body, "visual"):
+            raise RuntimeError(
+                "Qwen FP8 checkpoint did not load the expected conditional-generation architecture."
+            )
+        model_body.visual = None
+        gc.collect()
+        torch.cuda.empty_cache()
+        logger.info("Released the unused Qwen FP8 vision encoder")
+
+    @property
+    def input_device(self) -> torch.device:
+        """Device holding token embeddings under the current device map."""
+        embeddings = self.model.get_input_embeddings()
+        if embeddings is None or not hasattr(embeddings, "weight"):
+            raise RuntimeError(
+                f"Model {self.model_name} does not expose input embeddings."
+            )
+        return embeddings.weight.device
 
 
     
@@ -60,7 +194,7 @@ class LLM():
         # prompt SHOULD ALREADY HAVE chat template applied
         logger.info(f"Generating text with model {self.model_name}")
 
-        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.model.device)
+        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.input_device)
 
         temp = self.tokenizer.decode(inputs.input_ids[0], skip_special_tokens=False)
         # breakpoint()
@@ -127,7 +261,7 @@ class LLM():
         """
         logger.info(f"Forward pass with model {self.model_name}")
 
-        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.model.device)
+        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.input_device)
 
         temp = self.tokenizer.decode(inputs.input_ids[0], skip_special_tokens=False)
         # breakpoint()
@@ -220,7 +354,7 @@ class LLM():
         Returns raw batched output (sequences [N, seq_len], logits tuple of [N, vocab], etc.)."""
         logger.info(f"Batched generate ({num_sequences} seqs) with model {self.model_name}")
 
-        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.model.device)
+        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.input_device)
 
         if stop_strings:
             stop_criteria = StoppingCriteriaList([
@@ -277,7 +411,7 @@ class LLM():
 
         inputs = self.tokenizer(
             prompts, return_tensors="pt", padding=True, add_special_tokens=False
-        ).to(self.model.device)
+        ).to(self.input_device)
 
         if stop_strings:
             stop_criteria = StoppingCriteriaList([
@@ -325,7 +459,7 @@ class LLM():
 
         inputs = self.tokenizer(
             prompts, return_tensors="pt", padding=True, add_special_tokens=False
-        ).to(self.model.device)
+        ).to(self.input_device)
         # inputs.input_ids: [N, max_len], inputs.attention_mask: [N, max_len]
 
         with torch.inference_mode():
@@ -398,7 +532,7 @@ class LLM():
 
         inputs = self.tokenizer(
             prompts, return_tensors="pt", padding=True, add_special_tokens=False
-        ).to(self.model.device)
+        ).to(self.input_device)
 
         with torch.inference_mode():
             outputs = self.model(
@@ -440,7 +574,7 @@ class LLM():
 
         delta_inputs = self.tokenizer(
             delta_texts, return_tensors="pt", padding=True, add_special_tokens=False
-        ).to(self.model.device)
+        ).to(self.input_device)
         # delta_inputs.input_ids: [N, max_delta_len]
         # delta_inputs.attention_mask: [N, max_delta_len] (0 for padding, 1 for real)
 
@@ -448,7 +582,7 @@ class LLM():
 
         # Build full attention mask: [N, cache_seq_len + max_delta_len]
         # The cache prefix is always attended to (all 1s), delta has left-padding (0s then 1s)
-        cache_mask = torch.ones(N, cache_seq_len, dtype=torch.long, device=self.model.device)
+        cache_mask = torch.ones(N, cache_seq_len, dtype=torch.long, device=self.input_device)
         full_attention_mask = torch.cat([cache_mask, delta_inputs.attention_mask], dim=1)
 
         # Derive per-row positions from the mask so left-padding does not shift
@@ -550,12 +684,12 @@ class LLM():
 
         delta_inputs = self.tokenizer(
             delta_texts, return_tensors="pt", padding=True, add_special_tokens=False
-        ).to(self.model.device)
+        ).to(self.input_device)
 
         max_delta_len = delta_inputs.input_ids.shape[1]
 
         # Full attention mask: prefix (all 1s) + delta (with left-pad 0s)
-        cache_mask = torch.ones(N, cache_seq_len, dtype=torch.long, device=self.model.device)
+        cache_mask = torch.ones(N, cache_seq_len, dtype=torch.long, device=self.input_device)
         full_attention_mask = torch.cat([cache_mask, delta_inputs.attention_mask], dim=1)
 
         # Assign positions from the attention mask so left-padding does not shift

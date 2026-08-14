@@ -55,7 +55,7 @@ def parse():
         default=False,
         help=(
             "Experimental: batch generation, confidence scoring, and forward "
-            "passes for Llama, Qwen HF, or Qwen vLLM. "
+            "passes for Llama, Qwen HF/FP8, or Qwen vLLM. "
             "--experimental_llama_batch is a "
             "backward-compatible alias."
         ),
@@ -140,7 +140,7 @@ def parse():
         "--model",
         type=str,
         required=True,
-        choices=["llama", "qwen", "qwen_vllm", "gpt"],
+        choices=["llama", "qwen", "qwen_fp8", "qwen_vllm", "gpt"],
         help="The model to use for the statistical testing",
     )
     args.add_argument(
@@ -216,6 +216,7 @@ def check_args(args: argparse.Namespace):
         "gpt": "api",
         "llama": "hf",
         "qwen": "hf",
+        "qwen_fp8": "hf",
         "qwen_vllm": "vllm",
     }
     required_backend = required_backends[args.model]
@@ -226,10 +227,11 @@ def check_args(args: argparse.Namespace):
     if args.experimental_llama_batch and args.model not in {
         "llama",
         "qwen",
+        "qwen_fp8",
         "qwen_vllm",
     }:
         raise ValueError(
-            "--experimental_batch is only supported for llama, qwen, and qwen_vllm"
+            "--experimental_batch is only supported for llama, qwen, qwen_fp8, and qwen_vllm"
         )
     if getattr(args, "vllm_base_url", None) is not None and args.model != "qwen_vllm":
         raise ValueError("--vllm_base_url is only supported with --model qwen_vllm")

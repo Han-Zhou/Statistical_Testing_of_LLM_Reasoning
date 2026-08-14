@@ -6,6 +6,7 @@ MODEL_ATTENTION_IMPLEMENTATION_REGISTRY = MappingProxyType({
     # "llama": "sdpa"
     "llama": "flash_attention_2",
     "qwen": "flash_attention_2",
+    "qwen_fp8": None,
 })
 
 ANSWER_TOKENS = {
@@ -18,5 +19,4 @@ ANSWER_TOKENS = {
     "gpt_True": ["True"],
     "gpt_False": ["False"],
 }
-
 

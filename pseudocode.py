@@ -91,8 +91,11 @@ def alternative_cot_lawyer(question, answer, nb, temperature, question_cache=Non
 def alternative_cot_stepbootstrap(question, reference_cot, nb)
     for i in range(nb):
         steps = split_steps(reference_cot)
-        resampled_steps = np.random.choice(steps[:-1], size=len(steps)-1)
-        stepbootstrap_cots += [rebuild_cot(*resampled_steps, steps[-1])]
+        sampled_indices = np.sort(
+            np.random.choice(len(steps), size=len(steps), replace=True)
+        )
+        resampled_steps = [steps[index] for index in sampled_indices]
+        stepbootstrap_cots += [rebuild_cot(*resampled_steps)]
     
     return stepbootstrap_cots
 

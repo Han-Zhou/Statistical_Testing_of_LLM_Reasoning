@@ -18,15 +18,15 @@ def _resample_steps(steps: list[str], rng: np.random.Generator) -> list[str]:
     if len(steps) < 2:
         return list(steps)
 
-    # Bootstrap the non-final steps by index, then restore their original
-    # ordering. Sampling with replacement still permits duplicate and omitted
-    # steps, while sorting prevents the reconstructed reasoning from being
-    # randomly scrambled. The final step is always preserved at the end.
-    prefix_size = len(steps) - 1
+    # Bootstrap all steps by index, including the final reasoning step, then
+    # restore their original ordering. Sampling with replacement permits every
+    # step to be duplicated or omitted, while sorting prevents the reconstructed
+    # reasoning from being randomly scrambled.
+    sample_size = len(steps)
     sampled_indices = np.sort(
-        rng.choice(prefix_size, size=prefix_size, replace=True)
+        rng.choice(sample_size, size=sample_size, replace=True)
     )
-    return [steps[int(index)] for index in sampled_indices] + [steps[-1]]
+    return [steps[int(index)] for index in sampled_indices]
 
 def _rebuild_cot(steps: list[str]) -> str:
     # Renumber 'Step N:' so the result is monotonic; leave non-marker steps as-is.

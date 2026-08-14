@@ -109,9 +109,17 @@ Some remarks:
 - cache slicing does not work for Qwen3_5DynamicCache. For generation on question_cache and whole_cache, we just run a forward pass.
 """
 class QwenAdapter(ModelAdapter):
-    def __init__(self):
-        attention_implementation = MODEL_ATTENTION_IMPLEMENTATION_REGISTRY.get("qwen")
-        self.model = LLM(model_name="qwen", attention_implementation=attention_implementation)
+    def __init__(
+        self,
+        model_name: str = "qwen",
+        enable_thinking: bool | None = None,
+    ):
+        self.enable_thinking = enable_thinking
+        attention_implementation = MODEL_ATTENTION_IMPLEMENTATION_REGISTRY.get(model_name)
+        self.model = LLM(
+            model_name=model_name,
+            attention_implementation=attention_implementation,
+        )
         self.model_scorer = QwenScorer(self.model)
 
     def _strip_trailing_special_token(self, text: str) -> tuple[str, bool]:
@@ -231,11 +239,15 @@ class QwenAdapter(ModelAdapter):
     def render_prompt(self, messages: list[dict[str, str]]) -> str:
         """Converts messages dict to a prompt_text with proper chat template applied"""
         has_assistant_prefill = any(m.get("role") == "assistant" for m in messages)
+        template_kwargs = {}
+        if self.enable_thinking is not None:
+            template_kwargs["enable_thinking"] = self.enable_thinking
 
         if has_assistant_prefill:
             prompt_text = self.model.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
+                **template_kwargs,
             )
         else:
             prompt_text = self.model.tokenizer.apply_chat_template(
@@ -243,6 +255,7 @@ class QwenAdapter(ModelAdapter):
                 tokenize=False,
                 add_generation_prompt=True,       # Let the template add the assistant header
                 continue_final_message=False,
+                **template_kwargs,
             )
         # avoid empty think blocks that might be auto-injected
         prompt_text = re.sub(r"<think>\s*</think>\s*", "", prompt_text)
@@ -568,3 +581,10 @@ class QwenAdapter(ModelAdapter):
         if non_eos.numel() == 0:
             return sequence
         return sequence[:non_eos[-1].item() + 1]
+
+
+class QwenFp8Adapter(QwenAdapter):
+    """Qwen reasoning adapter backed by the Qwen3.6 FP8 checkpoint."""
+
+    def __init__(self):
+        super().__init__(model_name="qwen_fp8", enable_thinking=True)

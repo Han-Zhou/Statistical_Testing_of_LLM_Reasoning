@@ -30,6 +30,7 @@ class GenerationConfig:
         return self.experimental_llama_batch and self.model in {
             "llama",
             "qwen",
+            "qwen_fp8",
             "qwen_vllm",
         }
 

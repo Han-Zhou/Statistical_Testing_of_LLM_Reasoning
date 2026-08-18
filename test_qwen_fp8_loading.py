@@ -1,4 +1,4 @@
-"""CPU-safe diagnostics for the Qwen3.6 FP8 loading safeguards."""
+"""CPU-safe diagnostics for the registered Qwen FP8 loading safeguards."""
 
 import unittest
 from types import SimpleNamespace
@@ -127,23 +127,24 @@ class QwenFp8LoaderTests(unittest.TestCase):
                 return_value=(loaded_model, loading_info),
             ) as load_model,
         ):
-            wrapper._load_qwen_fp8_model("Qwen/Qwen3.6-27B-FP8")
+            wrapper._load_qwen_fp8_model("Qwen/Qwen3.8-27B-FP8")
 
         load_config.assert_called_once_with(
-            "Qwen/Qwen3.6-27B-FP8",
+            "Qwen/Qwen3.8-27B-FP8",
             trust_remote_code=True,
         )
         load_tokenizer.assert_called_once_with(
-            "Qwen/Qwen3.6-27B-FP8",
+            "Qwen/Qwen3.8-27B-FP8",
             trust_remote_code=True,
         )
         load_model.assert_called_once_with(
-            "Qwen/Qwen3.6-27B-FP8",
+            "Qwen/Qwen3.8-27B-FP8",
             config=config,
             device_map="auto",
             dtype="auto",
             output_loading_info=True,
             trust_remote_code=True,
+            allow_all_kernels=True,
         )
         self.assertEqual(
             config.quantization_config["modules_to_not_convert"],
@@ -162,7 +163,7 @@ class QwenFp8LoaderTests(unittest.TestCase):
             patch("models.core_models.llm.AutoTokenizer.from_pretrained") as load_tokenizer,
         ):
             with self.assertRaisesRegex(RuntimeError, "requires a CUDA GPU"):
-                wrapper._load_qwen_fp8_model("Qwen/Qwen3.6-27B-FP8")
+                wrapper._load_qwen_fp8_model("Qwen/Qwen3.8-27B-FP8")
         load_tokenizer.assert_not_called()
 
 

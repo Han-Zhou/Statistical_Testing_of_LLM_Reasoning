@@ -6,7 +6,8 @@ from types import MappingProxyType
 MODEL_HF_REGISTRY = MappingProxyType({
     "llama": "meta-llama/Llama-3.1-8B-Instruct",
     "qwen": "Qwen/Qwen3.5-27B",
-    "qwen_fp8": "Qwen/Qwen3.6-27B-FP8",
+    # "qwen_fp8": "Qwen/Qwen3.6-27B-FP8",
+    "qwen_fp8": "Qwen/Qwen3.8-27B-FP8",
     "qwen_vllm": "Qwen/Qwen3.5-27B",
     # "mistral": "mistralai/Mistral-Small-3.1-24B-Instruct-2503"
 })
@@ -25,5 +26,4 @@ MODEL_API_PRICING = MappingProxyType({
     "gpt-4o-mini-2024-07-18": {"input": 0.3 / 1e6, "output": 1.2 / 1e6},
     "gpt-4o": {"input": 5.0 / 1e6, "output": 20.0 / 1e6},
 })
-
 

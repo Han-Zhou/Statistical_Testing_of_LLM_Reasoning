@@ -121,15 +121,15 @@ class LLM():
         logger.info(f"Model {self.model_name} loaded successfully.")
 
     def _load_qwen_fp8_model(self, actual_model_name: str) -> None:
-        """Load Qwen3.6 FP8 through its declared multimodal architecture."""
+        """Load the registered Qwen FP8 checkpoint through its declared architecture."""
         if not torch.cuda.is_available():
-            raise RuntimeError("Qwen3.6-27B-FP8 requires a CUDA GPU.")
+            raise RuntimeError(f"{actual_model_name} requires a CUDA GPU.")
 
         try:
             from transformers import AutoConfig, Qwen3_5ForConditionalGeneration
         except ImportError as exc:
             raise RuntimeError(
-                "Qwen3.6-27B-FP8 requires a Transformers version that exposes "
+                f"{actual_model_name} requires a Transformers version that exposes "
                 "Qwen3_5ForConditionalGeneration."
             ) from exc
 
@@ -156,6 +156,7 @@ class LLM():
             dtype="auto",
             output_loading_info=True,
             trust_remote_code=True,
+            allow_all_kernels=True,
         )
         _validate_qwen_fp8_loading_info(loading_info)
         self.model.eval()

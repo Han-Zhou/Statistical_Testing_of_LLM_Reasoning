@@ -31,6 +31,51 @@ LETTERS = "ABCD"
 QWEN_STOP_STRINGS.extend(f"\n\n{letter}\n" for letter in LETTERS)
 QWEN_STOP_STRINGS.extend(f"\n\n({letter})\n" for letter in LETTERS)
 
+_STEP_MARKER_RE = re.compile(r"(Step\s+\d+\s*:)", re.IGNORECASE)
+_THINK_CLOSE = "</think>"
+
+
+def _text_for_cot_steps(text_cot: str) -> str:
+    """Slice of ``text_cot`` that should be split into bootstrapable steps.
+
+    Qwen thinking models keep ``<think>...</think>`` in the generation so the
+    re-forwarded sequence matches what was sampled. Numbered CoT can sit
+    either after a closed think block (phase 1 hit ``</think>``) or inside
+    it (phase 1 ran to max tokens and the close arrives later). Prefer the
+    post-think region when it contains ``Step N:`` markers; otherwise use
+    the in-think region, truncated at ``</think>``. Always start at the
+    first ``Step N:`` so the unstructured think dump is not a step.
+    """
+    close = text_cot.find(_THINK_CLOSE)
+    if close == -1:
+        region = text_cot
+    else:
+        after = text_cot[close + len(_THINK_CLOSE):]
+        if _STEP_MARKER_RE.search(after):
+            region = after
+        else:
+            region = text_cot[:close]
+    match = _STEP_MARKER_RE.search(region)
+    if match is not None:
+        return region[match.start():]
+    return region
+
+
+def _split_cot_steps(text_cot: str) -> list[str]:
+    parts = _STEP_MARKER_RE.split(text_cot)
+    if len(parts) > 1:
+        steps = []
+        preamble = parts[0].strip()
+        if preamble:
+            steps.append(preamble)
+        for i in range(1, len(parts) - 1, 2):
+            steps.append((parts[i] + parts[i + 1]).strip())
+        return [s for s in steps if s]
+    by_blank = [s.strip() for s in re.split(r"\n{2,}", text_cot) if s.strip()]
+    if len(by_blank) > 1:
+        return by_blank
+    return [s.strip() for s in text_cot.splitlines() if s.strip()]
+
 
 
 
@@ -159,23 +204,28 @@ class QwenAdapter(ModelAdapter):
             text_cot = text_cot_with_answer
 
         # we extract the cot_steps out of text_cot
-        _STEP_MARKER_RE = re.compile(r"(Step\s+\d+\s*:)", re.IGNORECASE)
-        parts = _STEP_MARKER_RE.split(text_cot)
-        if len(parts) > 1:
-            steps = []
-            preamble = parts[0].strip()
-            if preamble:
-                steps.append(preamble)
-            for i in range(1, len(parts) - 1, 2):
-                steps.append((parts[i] + parts[i + 1]).strip())
-            cot_steps = [s for s in steps if s]
+        # _STEP_MARKER_RE = re.compile(r"(Step\s+\d+\s*:)", re.IGNORECASE)
+        # parts = _STEP_MARKER_RE.split(text_cot)
+        # if len(parts) > 1:
+        #     steps = []
+        #     preamble = parts[0].strip()
+        #     if preamble:
+        #         steps.append(preamble)
+        #     for i in range(1, len(parts) - 1, 2):
+        #         steps.append((parts[i] + parts[i + 1]).strip())
+        #     cot_steps = [s for s in steps if s]
         # No "Step N:" markers — fall back to blank-line, then line splits
-        else:
-            by_blank = [s.strip() for s in re.split(r"\n{2,}", text_cot) if s.strip()]
-            if len(by_blank) > 1:
-                cot_steps = by_blank
-            else:
-                cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
+        # else:
+        #     by_blank = [s.strip() for s in re.split(r"\n{2,}", text_cot) if s.strip()]
+        #     if len(by_blank) > 1:
+        #         cot_steps = by_blank
+        #     else:
+        #         cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
+
+        # Keep thinking in text_cot / text_cot_with_answer so confidence
+        # re-forwards the sampled sequence. Split steps from the numbered
+        # CoT region only — see _text_for_cot_steps.
+        cot_steps = _split_cot_steps(_text_for_cot_steps(text_cot))
 
 
         # Serial vanilla generation returns a cache and needs a question cache
@@ -387,12 +437,18 @@ class QwenAdapter(ModelAdapter):
         phase_3_outputs_raw = phase_3_outputs.outputs
         phase_3_generated_tokens = phase_3_outputs_raw.sequences[0]
         phase_3_outputs_text = self.model.tokenizer.decode(phase_3_generated_tokens, skip_special_tokens=False)
-        phase_3_outputs_text = re.sub(
-            r"<think>.*?</think>",
-            "",
-            phase_3_outputs_text,
-            flags=re.DOTALL,
-        ).strip()
+
+        # NOTE: TEMP: don't restrip the thinking part to test qwen 3.8
+        # phase_3_outputs_text = re.sub(
+        #     r"<think>.*?</think>",
+        #     "",
+        #     phase_3_outputs_text,
+        #     flags=re.DOTALL,
+        # ).strip()
+
+
+
+        
         # re-encode the generated phase 3 output to get offset mappings
         # phase_3_generated_tokens = self.model.tokenizer(
         #     phase_3_outputs_text,
@@ -524,10 +580,13 @@ class QwenAdapter(ModelAdapter):
             phase_3_prompts,
         )
         del phase_3_raw
-        cleaned_texts = [
-            re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-            for text in phase_3_texts
-        ]
+        # cleaned_texts = [
+        #     re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        #     for text in phase_3_texts
+        # ]
+
+        # NOTE: TEMP: don't restrip the thinking part to test qwen 3.8
+        cleaned_texts = phase_3_texts
 
         # Re-forward the cleaned texts to align full-prompt logits with token
         # offsets. Do not ask the core wrapper to split Qwen's hybrid cache.
@@ -584,7 +643,7 @@ class QwenAdapter(ModelAdapter):
 
 
 class QwenFp8Adapter(QwenAdapter):
-    """Qwen reasoning adapter backed by the Qwen3.6 FP8 checkpoint."""
+    """Qwen reasoning adapter backed by the registered FP8 checkpoint."""
 
     def __init__(self):
         super().__init__(model_name="qwen_fp8", enable_thinking=True)

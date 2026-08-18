@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Serial Qwen3.6 FP8 smoke test covering generation and confidence paths.
+# Serial Qwen FP8 smoke test covering generation and confidence paths.
 QWEN_FP8_PICKLE_PATH="${QWEN_FP8_PICKLE_PATH:-/shared_work/han/storage/cot/pickles/bigbench_movie_250.pkl}"
 
 python3 main.py \

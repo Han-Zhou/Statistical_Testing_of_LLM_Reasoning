@@ -1,4 +1,4 @@
-"""GPU diagnostic for Qwen3.6 FP8 homogeneous vs heterogeneous batching.
+"""GPU diagnostic for Qwen FP8 homogeneous vs heterogeneous batching.
 
 This is intentionally a standalone script rather than a unit test: loading the
 27B checkpoint requires CUDA and can take several minutes.  By default it runs
@@ -83,7 +83,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Compare serial, same-length batched, and different-length "
-            "left-padded generation with Qwen3.6 FP8."
+            "left-padded generation with the registered Qwen FP8 checkpoint."
         )
     )
     parser.add_argument(
@@ -222,7 +222,7 @@ def selected_cases(case: str) -> list[str]:
 
 def main() -> int:
     args = parse_args()
-    print("Loading Qwen3.6-27B-FP8...", flush=True)
+    print("Loading the registered Qwen FP8 checkpoint...", flush=True)
     adapter = QwenFp8Adapter()
     short_prompt = build_phase_3_prompt(adapter, args.short_repeats)
     long_prompt = build_phase_3_prompt(adapter, args.long_repeats)

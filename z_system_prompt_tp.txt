@@ -1,0 +1,201 @@
+W0821 16:18:14.156000 1178631 site-packages/torch/distributed/run.py:851] 
+W0821 16:18:14.156000 1178631 site-packages/torch/distributed/run.py:851] *****************************************
+W0821 16:18:14.156000 1178631 site-packages/torch/distributed/run.py:851] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0821 16:18:14.156000 1178631 site-packages/torch/distributed/run.py:851] *****************************************
+2026-08-21 16:18:18,358 - INFO - Loading LLM model: qwen_fp8
+2026-08-21 16:18:18,359 - INFO - Loading LLM model: qwen_fp8
+2026-08-21 16:18:18,561 - INFO - Loading custom TP FP8 model: free=15.116 GiB total=15.460 GiB config_patch={'original': 882, 'remaining': 562, 'removed_mlp_gate': 65, 'removed_non_text': 255, 'rewritten_text_prefix': 560} plan_styles={'embedding_rowwise': 1, 'colwise': 5, 'rowwise': 2, 'colwise_gather_output': 5, 'rowwise_split_input': 1}
+Fetching 66 files:   0%|          | 0/66 [00:00<?, ?it/s]Fetching 66 files: 100%|██████████| 66/66 [00:00<00:00, 3954.52it/s]
+Fetching 66 files:   0%|          | 0/66 [00:00<?, ?it/s]Fetching 66 files: 100%|██████████| 66/66 [00:00<00:00, 8429.22it/s]
+Loading weights:   0%|          | 0/1251 [00:00<?, ?it/s]Loading weights:   0%|          | 0/1251 [00:00<?, ?it/s]Loading weights:   0%|          | 2/1251 [00:00<01:24, 14.75it/s]Loading weights:   7%|▋         | 92/1251 [00:00<00:02, 440.04it/s]Loading weights:   0%|          | 2/1251 [00:00<01:52, 11.06it/s]Loading weights:  14%|█▎        | 172/1251 [00:00<00:01, 584.01it/s]Loading weights:   7%|▋         | 87/1251 [00:00<00:03, 376.63it/s]Loading weights:  22%|██▏       | 270/1251 [00:00<00:01, 699.87it/s]Loading weights:  14%|█▎        | 170/1251 [00:00<00:02, 530.93it/s]Loading weights:  28%|██▊       | 348/1251 [00:00<00:01, 720.82it/s]Loading weights:  20%|█▉        | 250/1251 [00:00<00:01, 606.97it/s]Loading weights:  35%|███▌      | 444/1251 [00:00<00:01, 774.30it/s]Loading weights:  28%|██▊       | 348/1251 [00:00<00:01, 694.28it/s]Loading weights:  42%|████▏     | 524/1251 [00:00<00:00, 779.74it/s]Loading weights:  35%|███▌      | 444/1251 [00:00<00:01, 750.94it/s]Loading weights:  48%|████▊     | 603/1251 [00:00<00:00, 769.25it/s]Loading weights:  42%|████▏     | 524/1251 [00:00<00:00, 747.95it/s]Loading weights:  55%|█████▍    | 688/1251 [00:00<00:00, 780.48it/s]Loading weights:  49%|████▉     | 610/1251 [00:00<00:00, 767.87it/s]Loading weights:  63%|██████▎   | 794/1251 [00:01<00:00, 847.29it/s]Loading weights:  57%|█████▋    | 711/1251 [00:01<00:00, 828.07it/s]Loading weights:  70%|███████   | 879/1251 [00:01<00:00, 820.21it/s]Loading weights:  64%|██████▎   | 795/1251 [00:01<00:00, 819.49it/s]Loading weights:  78%|███████▊  | 972/1251 [00:01<00:00, 811.29it/s]Loading weights:  70%|███████   | 878/1251 [00:01<00:00, 806.58it/s]Loading weights:  86%|████████▌ | 1070/1251 [00:01<00:00, 796.02it/s]Loading weights:  78%|███████▊  | 972/1251 [00:01<00:00, 817.80it/s]Loading weights:  92%|█████████▏| 1156/1251 [00:01<00:00, 812.97it/s]Loading weights:  85%|████████▌ | 1068/1251 [00:01<00:00, 833.91it/s]Loading weights: 100%|██████████| 1251/1251 [00:01<00:00, 760.82it/s]
+Loading weights:  92%|█████████▏| 1152/1251 [00:01<00:00, 822.92it/s]Loading weights: 100%|██████████| 1251/1251 [00:01<00:00, 753.81it/s]
+2026-08-21 16:18:33,774 - INFO - Model qwen_fp8 loaded successfully.
+2026-08-21 16:18:33,775 - INFO - [bigbench_movie] 250 entries loaded from /home/han/workspace/data_cot/pickles/bigbench_movie_250.pkl
+Generating [test-qwen-fp8-system-prompt]:   0%|          | 0/1 [00:00<?, ?sample/s]2026-08-21 16:18:33,786 - INFO - Generating text with model qwen_fp8
+2026-08-21 16:18:33,873 - INFO - unexpected_keys_count=0 sample=[]
+2026-08-21 16:18:33,873 - INFO - missing_keys_count=0 sample=[]
+2026-08-21 16:18:33,873 - INFO - mismatched_keys_count=0 sample=[]
+2026-08-21 16:18:33,875 - INFO - Custom TP model loaded: class=Qwen3_5ForCausalLM local_parameters=13.725 GiB
+2026-08-21 16:18:33,875 - INFO - Model qwen_fp8 loaded successfully.
+2026-08-21 16:18:33,876 - INFO - [bigbench_movie] 250 entries loaded from /home/han/workspace/data_cot/pickles/bigbench_movie_250.pkl
+Generating [test-qwen-fp8-system-prompt]:   0%|          | 0/1 [00:00<?, ?sample/s]2026-08-21 16:18:33,888 - INFO - Generating text with model qwen_fp8
+[transformers] DeepGEMM unavailable for this call, falling back to Triton. Reason: DeepGEMM requires Hopper (SM90) or Blackwell (SM100); current device is SM120.
+[transformers] DeepGEMM unavailable for this call, falling back to Triton. Reason: DeepGEMM requires Hopper (SM90) or Blackwell (SM100); current device is SM120.
+
+
+Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s][AFetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s][AFetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 6471.58it/s]
+Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 2840.81it/s]
+2026-08-21 16:20:19,997 - INFO - Generating text with model qwen_fp8
+2026-08-21 16:20:19,997 - INFO - Generating text with model qwen_fp8
+2026-08-21 16:20:41,827 - INFO - Generating text with model qwen_fp8
+2026-08-21 16:20:41,827 - INFO - Generating text with model qwen_fp8
+2026-08-21 16:20:42,162 - INFO - Forward pass with model qwen_fp8
+2026-08-21 16:20:42,162 - INFO - Forward pass with model qwen_fp8
+Generating [test-qwen-fp8-system-prompt]:   0%|          | 0/1 [02:15<?, ?sample/s]Generating [test-qwen-fp8-system-prompt]:   0%|          | 0/1 [02:15<?, ?sample/s]
+
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/test_qwen_fp8_system_prompt.py", line 491, in <module>
+[rank1]:     main()
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/test_qwen_fp8_system_prompt.py", line 482, in main
+[rank1]:     runner.run()
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/pipeline/runner.py", line 423, in run
+[rank1]:     self._run_datapoint_with_retries(datapoint)
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/test_qwen_fp8_system_prompt.py", line 387, in _run_datapoint_with_retries
+[rank1]:     self.run_generation_and_confidence(datapoint)
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/test_qwen_fp8_system_prompt.py", line 378, in run_generation_and_confidence
+[rank1]:     self._run_generation_and_confidence_vanilla()
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/pipeline/runner.py", line 94, in _run_generation_and_confidence_vanilla
+[rank1]:     vanilla_generation_output: ParsedOutputGeneration = self.vanilla_sampling.generate()
+[rank1]:                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/pipeline/sampling/vanilla_sampling.py", line 22, in generate
+[rank1]:     generate_output = self.context.model_adapter.generate(
+[rank1]:                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/models/adapters/base.py", line 107, in generate
+[rank1]:     output = self.generate_helper(prompt_text, max_tokens, cache, temperature)
+[rank1]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/models/adapters/qwen_adapter.py", line 493, in generate_helper
+[rank1]:     return self.model.forward(prompt=phase_3_outputs_text, return_llm_output=True)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/workspace/cot-zagreus-batching/models/core_models/llm.py", line 323, in forward
+[rank1]:     outputs = self.model(
+[rank1]:               ^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+[rank1]:     return self._call_impl(*args, **kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+[rank1]:     return forward_call(*args, **kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/utils/generic.py", line 903, in wrapper
+[rank1]:     output = func(self, *args, **kwargs)
+[rank1]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/models/qwen3_5/modeling_qwen3_5.py", line 1680, in forward
+[rank1]:     logits = self.lm_head(hidden_states[:, slice_indices, :])
+[rank1]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+[rank1]:     return self._call_impl(*args, **kwargs)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1885, in _call_impl
+[rank1]:     return inner()
+[rank1]:            ^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1846, in inner
+[rank1]:     hook_result = hook(self, args, result)
+[rank1]:                   ^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/integrations/tensor_parallel.py", line 650, in <lambda>
+[rank1]:     module.register_forward_hook(lambda mod, inputs, outputs: output_fn(mod, outputs, device_mesh))
+[rank1]:                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/integrations/tensor_parallel.py", line 728, in _prepare_output_fn
+[rank1]:     return all_gather(outputs, device_mesh)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/integrations/tensor_parallel.py", line 624, in all_gather
+[rank1]:     return _AllGather.apply(x, device_mesh)
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/autograd/function.py", line 596, in apply
+[rank1]:     return super().apply(*args, **kwargs)  # type: ignore[misc]
+[rank1]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/integrations/tensor_parallel.py", line 514, in forward
+[rank1]:     tensor_list = [torch.empty_like(x) for _ in range(world_size)]
+[rank1]:                    ^^^^^^^^^^^^^^^^^^^
+[rank1]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 340.00 MiB. GPU 1 has a total capacity of 15.47 GiB of which 48.81 MiB is free. Including non-PyTorch memory, this process has 15.40 GiB memory in use. Of the allocated memory 14.80 GiB is allocated by PyTorch, and 107.99 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/test_qwen_fp8_system_prompt.py", line 491, in <module>
+[rank0]:     main()
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/test_qwen_fp8_system_prompt.py", line 482, in main
+[rank0]:     runner.run()
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/pipeline/runner.py", line 423, in run
+[rank0]:     self._run_datapoint_with_retries(datapoint)
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/test_qwen_fp8_system_prompt.py", line 387, in _run_datapoint_with_retries
+[rank0]:     self.run_generation_and_confidence(datapoint)
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/test_qwen_fp8_system_prompt.py", line 378, in run_generation_and_confidence
+[rank0]:     self._run_generation_and_confidence_vanilla()
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/pipeline/runner.py", line 94, in _run_generation_and_confidence_vanilla
+[rank0]:     vanilla_generation_output: ParsedOutputGeneration = self.vanilla_sampling.generate()
+[rank0]:                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/pipeline/sampling/vanilla_sampling.py", line 22, in generate
+[rank0]:     generate_output = self.context.model_adapter.generate(
+[rank0]:                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/models/adapters/base.py", line 107, in generate
+[rank0]:     output = self.generate_helper(prompt_text, max_tokens, cache, temperature)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/models/adapters/qwen_adapter.py", line 493, in generate_helper
+[rank0]:     return self.model.forward(prompt=phase_3_outputs_text, return_llm_output=True)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/workspace/cot-zagreus-batching/models/core_models/llm.py", line 323, in forward
+[rank0]:     outputs = self.model(
+[rank0]:               ^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/utils/generic.py", line 903, in wrapper
+[rank0]:     output = func(self, *args, **kwargs)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/models/qwen3_5/modeling_qwen3_5.py", line 1680, in forward
+[rank0]:     logits = self.lm_head(hidden_states[:, slice_indices, :])
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1885, in _call_impl
+[rank0]:     return inner()
+[rank0]:            ^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1846, in inner
+[rank0]:     hook_result = hook(self, args, result)
+[rank0]:                   ^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/integrations/tensor_parallel.py", line 650, in <lambda>
+[rank0]:     module.register_forward_hook(lambda mod, inputs, outputs: output_fn(mod, outputs, device_mesh))
+[rank0]:                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/integrations/tensor_parallel.py", line 728, in _prepare_output_fn
+[rank0]:     return all_gather(outputs, device_mesh)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/integrations/tensor_parallel.py", line 624, in all_gather
+[rank0]:     return _AllGather.apply(x, device_mesh)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/autograd/function.py", line 596, in apply
+[rank0]:     return super().apply(*args, **kwargs)  # type: ignore[misc]
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/transformers/integrations/tensor_parallel.py", line 514, in forward
+[rank0]:     tensor_list = [torch.empty_like(x) for _ in range(world_size)]
+[rank0]:                    ^^^^^^^^^^^^^^^^^^^
+[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 340.00 MiB. GPU 0 has a total capacity of 15.46 GiB of which 313.00 MiB is free. Including non-PyTorch memory, this process has 15.06 GiB memory in use. Of the allocated memory 14.47 GiB is allocated by PyTorch, and 104.16 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
+W0821 16:20:51.027000 1178631 site-packages/torch/distributed/elastic/multiprocessing/api.py:1012] Sending process 1178688 closing signal SIGTERM
+E0821 16:20:51.032000 1178631 site-packages/torch/distributed/elastic/multiprocessing/api.py:986] failed (exitcode: 1) local_rank: 0 (pid: 1178687) of binary: /home/han/miniconda3/envs/cot_vllm/bin/python
+Traceback (most recent call last):
+  File "/home/han/miniconda3/envs/cot_vllm/bin/torchrun", line 6, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 362, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/distributed/run.py", line 990, in main
+    run(args)
+  File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/distributed/run.py", line 981, in run
+    elastic_launch(
+  File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 170, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 317, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+test_qwen_fp8_system_prompt.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2026-08-21_16:20:51
+  host      : ws-rtx5080-top
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 1178688)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-08-21_16:20:51
+  host      : ws-rtx5080-top
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 1178687)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

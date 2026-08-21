@@ -1,5 +1,6 @@
 import re
 import copy
+import logging
 
 from typing import Optional, Tuple
 
@@ -15,6 +16,9 @@ from models.adapters.shared_utils import _locate_answer_span, _char_to_token_idx
 
 import torch.nn.functional as F
 import torch
+
+
+logger = logging.getLogger(__name__)
 
 
 QWEN_STOP_STRINGS = [
@@ -398,23 +402,46 @@ class QwenAdapter(ModelAdapter):
             max_tokens=max_tokens,
             cache=cache,
             temperature=temperature,
-            stop_strings=["</think>"]
+            stop_strings=["</think>"],
+            output_logits_and_scores=False,
+            # output_logits_and_scores=True,
         )
 
-        # Decoding phase 1 outputs to get generated text from token IDs
+        # Preserve the exact Phase 1 tokenization when continuing from its cache.
+        # Decoding and re-tokenizing a generated sequence can change its token IDs.
         phase_1_outputs_raw = phase_1_outputs.outputs
-        phase_1_generated_tokens = phase_1_outputs_raw.sequences[0]
-        phase_1_outputs_text = self.model.tokenizer.decode(phase_1_generated_tokens, skip_special_tokens=False)
+        phase_1_ids = phase_1_outputs_raw.sequences
 
-        # 2) generate the answer part, with assistant prefill "let's think step by step. Step 1: "
-        # here we don't need to strip the special token coz it's guaranteed to end at </think>
-        phase_2_prompt = phase_1_outputs_text + "Let's think step by step. \nStep 1: "
+        # 2) generate the CoT part with an assistant prefill. Tokenize only the
+        # injected suffix so the cached Phase 1 prefix remains unchanged.
+        phase_2_suffix_ids = self.model.tokenizer(
+            "Let's think step by step. \nStep 1: ",
+            return_tensors="pt",
+            add_special_tokens=False,
+        ).input_ids.to(phase_1_ids.device)
+        phase_2_ids = torch.cat([phase_1_ids, phase_2_suffix_ids], dim=1)
+
+        phase_1_cache = phase_1_outputs_raw.past_key_values
+        cache_len = phase_1_cache.get_seq_length()
+        phase_1_len = phase_1_ids.shape[1]
+        phase_2_len = phase_2_ids.shape[1]
+        if cache_len > phase_1_len or cache_len >= phase_2_len:
+            logger.warning(
+                "Invalid Qwen Phase 2 cache handoff: cache=%d, phase_1=%d, "
+                "phase_2=%d; rebuilding the cache from exact token IDs",
+                cache_len,
+                phase_1_len,
+                phase_2_len,
+            )
+            phase_1_cache = None
+
         phase_2_outputs: LLMOutput = self.model.generate(
-            prompt=phase_2_prompt,
+            prompt=None,
+            input_ids=phase_2_ids,
             max_tokens=max_tokens,
             temperature=temperature,
             stop_strings=QWEN_STOP_STRINGS,
-            cache=phase_1_outputs_raw.past_key_values,
+            cache=phase_1_cache,
         )
 
         # Decoding phase 2 outputs to get generated text from token IDs

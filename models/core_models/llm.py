@@ -149,15 +149,32 @@ class LLM():
             actual_model_name,
             trust_remote_code=True,
         )
+        # self.model, loading_info = Qwen3_5ForConditionalGeneration.from_pretrained(
+        #     actual_model_name,
+        #     config=config,
+        #     device_map="auto",
+        #     dtype="auto",
+        #     output_loading_info=True,
+        #     trust_remote_code=True,
+        #     allow_all_kernels=True,
+        # )
+
         self.model, loading_info = Qwen3_5ForConditionalGeneration.from_pretrained(
             actual_model_name,
             config=config,
-            device_map="auto",
+            device_map="balanced_low_0",
+            max_memory={
+                0: "11GiB",    # Leave room for lm_head and generation
+                1: "14GiB",    # Hold more resident model weights
+                "cpu": "100GiB",
+            },
+            offload_buffers=True,
             dtype="auto",
             output_loading_info=True,
             trust_remote_code=True,
             allow_all_kernels=True,
         )
+
         _validate_qwen_fp8_loading_info(loading_info)
         self.model.eval()
 
@@ -185,20 +202,42 @@ class LLM():
     
     def generate(
             self, 
-            prompt: str, 
+            prompt: str | None,
             max_tokens: int, 
             cache: Optional[Tuple], 
             temperature: float,
-            stop_strings: list[str] | None = None
+            stop_strings: list[str] | None = None,
+            output_logits_and_scores: bool = True,
+            input_ids: torch.Tensor | None = None,
         ) -> LLMOutput:
-        # Generate text based on the prompt
-        # prompt SHOULD ALREADY HAVE chat template applied
+        # Generate from either prompt text or exact token IDs. The latter keeps
+        # cached multi-phase generation free from decode/re-tokenize drift.
         logger.info(f"Generating text with model {self.model_name}")
 
-        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.input_device)
-
-        temp = self.tokenizer.decode(inputs.input_ids[0], skip_special_tokens=False)
-        # breakpoint()
+        if (prompt is None) == (input_ids is None):
+            raise ValueError("Exactly one of prompt or input_ids must be provided")
+        if input_ids is None:
+            # prompt SHOULD ALREADY HAVE chat template applied
+            inputs = self.tokenizer(
+                prompt,
+                return_tensors="pt",
+                add_special_tokens=False,
+            ).to(self.input_device)
+        else:
+            if input_ids.ndim == 1:
+                input_ids = input_ids.unsqueeze(0)
+            if input_ids.ndim != 2 or input_ids.shape[0] != 1:
+                raise ValueError(
+                    "input_ids must have shape [T] or [1, T], "
+                    f"got {tuple(input_ids.shape)}"
+                )
+            if input_ids.shape[1] == 0:
+                raise ValueError("input_ids must contain at least one token")
+            input_ids = input_ids.to(device=self.input_device, dtype=torch.long)
+            inputs = {
+                "input_ids": input_ids,
+                "attention_mask": torch.ones_like(input_ids),
+            }
 
 
         if stop_strings:
@@ -218,20 +257,21 @@ class LLM():
                     do_sample=(temperature > 0.0),
                     temperature=temperature if temperature > 0.0 else None,
                     pad_token_id=self.tokenizer.eos_token_id,
-                    output_logits=True,
-                    output_scores=True,
+                    output_logits=output_logits_and_scores,
+                    output_scores=output_logits_and_scores,
                     stopping_criteria=stop_criteria,
                 )
             else:
                 outputs = self.model.generate(
                     **inputs,
+                    use_cache=True,
                     return_dict_in_generate=True,
                     max_new_tokens=max_tokens,
                     do_sample=(temperature > 0.0),
                     temperature=temperature if temperature > 0.0 else None,
                     pad_token_id=self.tokenizer.eos_token_id,
-                    output_logits=True,
-                    output_scores=True,
+                    output_logits=output_logits_and_scores,
+                    output_scores=output_logits_and_scores,
                     stopping_criteria=stop_criteria,
                 )
 

@@ -51,6 +51,39 @@ class _PaddingTokenizerStub:
         return ",".join(str(int(token_id)) for token_id in ids)
 
 
+class _SerialGenerationTokenizerStub:
+    eos_token_id = 0
+    all_special_tokens: list[str] = []
+
+    def __call__(
+        self,
+        text,
+        return_tensors=None,
+        add_special_tokens=False,
+        return_offsets_mapping=False,
+    ):
+        del text, return_tensors, add_special_tokens
+        if return_offsets_mapping:
+            return {"offset_mapping": [(0, 1)]}
+        return SimpleNamespace(input_ids=torch.tensor([[90, 91]]))
+
+    def decode(self, token_ids, skip_special_tokens=False):
+        del skip_special_tokens
+        ids = token_ids.tolist() if isinstance(token_ids, torch.Tensor) else token_ids
+        return {
+            20: "phase 2",
+            30: "phase 3",
+        }[int(ids[0])]
+
+
+class _CacheLengthStub:
+    def __init__(self, length):
+        self.length = length
+
+    def get_seq_length(self):
+        return self.length
+
+
 class _TinyQwenTokenizer:
     pad_token_id = 0
     eos_token_id = 2
@@ -221,6 +254,82 @@ class QwenHfBatchingTest(unittest.TestCase):
             return_cache=False,
         )
 
+    def test_serial_phase_2_preserves_ids_and_reuses_valid_cache(self):
+        phase_1_cache = _CacheLengthStub(length=2)
+        phase_1 = SimpleNamespace(
+            sequences=torch.tensor([[10, 11, 12]]),
+            past_key_values=phase_1_cache,
+        )
+        phase_2 = SimpleNamespace(
+            sequences=torch.tensor([[20]]),
+            past_key_values=_CacheLengthStub(length=1),
+        )
+        phase_3 = SimpleNamespace(sequences=torch.tensor([[30]]))
+        forwarded = object()
+
+        adapter = QwenAdapter.__new__(QwenAdapter)
+        adapter.model = SimpleNamespace(
+            tokenizer=_SerialGenerationTokenizerStub(),
+            generate=Mock(
+                side_effect=[
+                    SimpleNamespace(outputs=phase_1),
+                    SimpleNamespace(outputs=phase_2),
+                    SimpleNamespace(outputs=phase_3),
+                ]
+            ),
+            forward=Mock(return_value=forwarded),
+        )
+
+        output = adapter.generate_helper(
+            prompt="prompt",
+            max_tokens=128,
+            cache=None,
+            temperature=0.0,
+        )
+
+        self.assertIs(output, forwarded)
+        phase_2_call = adapter.model.generate.call_args_list[1]
+        torch.testing.assert_close(
+            phase_2_call.kwargs["input_ids"],
+            torch.tensor([[10, 11, 12, 90, 91]]),
+        )
+        self.assertIs(phase_2_call.kwargs["cache"], phase_1_cache)
+        self.assertIsNone(phase_2_call.kwargs["prompt"])
+
+    def test_serial_phase_2_rebuilds_invalid_cache(self):
+        phase_1 = SimpleNamespace(
+            sequences=torch.tensor([[10, 11, 12]]),
+            past_key_values=_CacheLengthStub(length=6),
+        )
+        phase_2 = SimpleNamespace(
+            sequences=torch.tensor([[20]]),
+            past_key_values=_CacheLengthStub(length=1),
+        )
+        phase_3 = SimpleNamespace(sequences=torch.tensor([[30]]))
+
+        adapter = QwenAdapter.__new__(QwenAdapter)
+        adapter.model = SimpleNamespace(
+            tokenizer=_SerialGenerationTokenizerStub(),
+            generate=Mock(
+                side_effect=[
+                    SimpleNamespace(outputs=phase_1),
+                    SimpleNamespace(outputs=phase_2),
+                    SimpleNamespace(outputs=phase_3),
+                ]
+            ),
+            forward=Mock(return_value=object()),
+        )
+
+        adapter.generate_helper(
+            prompt="prompt",
+            max_tokens=128,
+            cache=None,
+            temperature=0.0,
+        )
+
+        phase_2_call = adapter.model.generate.call_args_list[1]
+        self.assertIsNone(phase_2_call.kwargs["cache"])
+
     def test_forward_pass_batch_helper_ignores_qwen_hybrid_cache(self):
         forwarded = ["output a", "output b"]
         adapter = QwenAdapter.__new__(QwenAdapter)
@@ -384,6 +493,81 @@ class QwenCoreBatchingTest(unittest.TestCase):
                 rtol=1e-5,
                 atol=1e-5,
             )
+
+    def test_generate_accepts_exact_input_ids_with_full_attention_mask(self):
+        wrapper = LLM.__new__(LLM)
+        wrapper.model_name = "stub-qwen"
+        wrapper.tokenizer = _TinyQwenTokenizer()
+        wrapper.model = Mock()
+        wrapper.model.get_input_embeddings.return_value = SimpleNamespace(
+            weight=torch.empty(1)
+        )
+        wrapper.model.generate.return_value = SimpleNamespace(
+            sequences=torch.tensor([[7, 8]])
+        )
+        cache = object()
+
+        wrapper.generate(
+            prompt=None,
+            input_ids=torch.tensor([7, 8]),
+            max_tokens=4,
+            cache=cache,
+            temperature=0.0,
+        )
+
+        kwargs = wrapper.model.generate.call_args.kwargs
+        torch.testing.assert_close(kwargs["input_ids"], torch.tensor([[7, 8]]))
+        torch.testing.assert_close(
+            kwargs["attention_mask"],
+            torch.ones((1, 2), dtype=torch.long),
+        )
+        self.assertIs(kwargs["past_key_values"], cache)
+
+        wrapper.model.generate.reset_mock()
+        wrapper.generate(
+            prompt=None,
+            input_ids=torch.tensor([7, 8]),
+            max_tokens=4,
+            cache=None,
+            temperature=0.0,
+        )
+
+        fallback_kwargs = wrapper.model.generate.call_args.kwargs
+        self.assertTrue(fallback_kwargs["use_cache"])
+        self.assertNotIn("past_key_values", fallback_kwargs)
+
+    def test_exact_id_cache_continuation_matches_fresh_prefill(self):
+        phase_1_inputs = self.llm.tokenizer("abc", return_tensors="pt")
+        with torch.inference_mode():
+            phase_1 = self.llm.model.generate(
+                **phase_1_inputs,
+                use_cache=True,
+                return_dict_in_generate=True,
+                max_new_tokens=2,
+                do_sample=False,
+            )
+
+        suffix_ids = self.llm.tokenizer("z", return_tensors="pt").input_ids
+        phase_2_ids = torch.cat([phase_1.sequences, suffix_ids], dim=1)
+        cached = self.llm.generate(
+            prompt=None,
+            input_ids=phase_2_ids,
+            max_tokens=2,
+            cache=phase_1.past_key_values,
+            temperature=0.0,
+        )
+        fresh = self.llm.generate(
+            prompt=None,
+            input_ids=phase_2_ids,
+            max_tokens=2,
+            cache=None,
+            temperature=0.0,
+        )
+
+        torch.testing.assert_close(
+            cached.outputs.sequences,
+            fresh.outputs.sequences,
+        )
 
 
 if __name__ == "__main__":

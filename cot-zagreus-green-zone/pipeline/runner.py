@@ -1,0 +1,427 @@
+
+import asyncio
+import time
+import logging
+
+from dotenv import load_dotenv
+from openai import APIConnectionError, APITimeoutError, InternalServerError
+from tqdm import tqdm
+from tqdm.contrib.discord import tqdm as tqdm_discord
+
+from config import GenerationConfig, ConfidenceConfig, SamplingConfig
+from confidence import ConfidenceEngine
+# from models import LLM, API_LLM
+from models.adapters import ModelAdapter
+from models.registry import MODEL_ADAPTER_REGISTRY
+
+from domain import ParsedOutputGeneration, Datapoint, TrajectoryRecord, EvaluationResult, ConfidenceScores, Timings
+from pipeline.sampling import SamplingMethod, SamplingMethodFactory, SampleContext
+
+from confidence.confidence_engine import ConfidenceEngine 
+
+from repository import TrajectoryRepository
+from datasets import DATASETS, Dataset
+
+
+load_dotenv()
+
+
+logger = logging.getLogger(__name__)
+
+
+class Runner:
+    def __init__(
+        self,
+        generation_config: GenerationConfig,
+        confidence_config: ConfidenceConfig,
+        sampling_config: SamplingConfig,
+        discord: bool = False,
+    ):
+        self.generation_config = generation_config
+        self.confidence_config = confidence_config
+        self.sampling_config = sampling_config
+        self.discord = discord
+        
+        adapter_cls = MODEL_ADAPTER_REGISTRY[self.generation_config.model]
+        if self.generation_config.model == "llama":
+            self.model_adapter = adapter_cls(debug_nocache=self.generation_config.debug_nocache)
+        elif self.generation_config.model == "qwen_vllm":
+            self.model_adapter = adapter_cls(
+                vllm_base_url=self.generation_config.vllm_base_url
+            )
+        else:
+            self.model_adapter = adapter_cls()
+
+        self.confidence_engine: ConfidenceEngine = ConfidenceEngine(self.confidence_config, self.model_adapter.model_scorer)
+
+        # Datasets
+        self.dataset: Dataset = DATASETS[self.generation_config.dataset]()
+
+        self.context = SampleContext(model_adapter=self.model_adapter, dataset=self.dataset)
+
+        # Generation and confidence
+        (
+            self.vanilla_sampling,
+            self.rejection_sampling,
+            self.lawyer_sampling,
+            self.stepbootstrap_sampling
+        ) = SamplingMethodFactory.create(
+            generation_config=self.generation_config,
+            sampling_config=self.sampling_config,
+            context=self.context
+        )
+
+
+        # Repository — created in run(), once the sample range is resolved against the dataset size.
+
+
+    def _init_repositories(self, samples: str | int):
+        base_dir_name = f"trajectories/{self.generation_config.tag}_{self.generation_config.model}_{self.generation_config.dataset}_s{samples}"
+        self.vanilla_trajectory_repository = TrajectoryRepository(f"{base_dir_name}/vanilla")
+        self.rejection_trajectory_repository = TrajectoryRepository(f"{base_dir_name}/rejection")
+        self.lawyer_trajectory_repository = TrajectoryRepository(f"{base_dir_name}/lawyer")
+        self.stepbootstrap_trajectory_repository = TrajectoryRepository(f"{base_dir_name}/stepbootstrap")
+
+    def _run_generation_and_confidence_vanilla(self):
+        """
+        - generate vanilla samples & confidences;
+        - outputs to the vanilla dir
+        - mutate the reference_* fields in self.context
+        """
+        # generate vanilla samples & confidences
+        datapoint = self.context.datapoint
+        T0 = time.perf_counter()
+        vanilla_generation_output: ParsedOutputGeneration = self.vanilla_sampling.generate()
+        T1 = time.perf_counter()
+        vanilla_confidence, vanilla_confidence_time = self.confidence_engine.compute_confidence(vanilla_generation_output)
+        T2 = time.perf_counter()
+
+        # update context
+        self.context.reference_vanilla_cot = vanilla_generation_output.cot_steps
+        self.context.reference_vanilla_final_answer = vanilla_generation_output.final_answer
+        self.context.reference_vanilla_question_cache = vanilla_generation_output.question_cache
+        if self.generation_config.backend == "api":
+            self.context.reference_vanilla_answer_tokens_for_api = vanilla_generation_output.answer_token_ids
+
+        record = TrajectoryRecord(
+                    id=datapoint.id,
+                    question=datapoint.question,
+                    ground_truth=datapoint.ground_truth,
+                    prompt=vanilla_generation_output.text_question,
+                    generated_text=vanilla_generation_output.text_cot_with_answer,
+                    cot_steps=vanilla_generation_output.cot_steps,
+                    final_answer=vanilla_generation_output.final_answer,
+                    evaluation_result=None,
+                    confidences=vanilla_confidence,
+                    timings=Timings(
+                        generation_time=T1-T0,
+                        confidence_time=vanilla_confidence_time,
+                        total_confidence_time=T2-T1,
+                    ),
+                    input_messages=vanilla_generation_output.input_messages,
+                    cost=self.model_adapter.cost(),
+                )
+        
+
+        # breakpoint()
+
+        self.dataset.evaluate(record)
+        
+        # save vanilla trajectory
+        self.vanilla_trajectory_repository.save(
+            trajectory_record=record
+        )
+
+
+    def _run_generation_and_confidence_rejection(self):
+        """
+        - generate rejection samples & confidences;
+        - outputs to the rejection dir (one file per sample)
+        """
+        # generate rejection samples & confidences
+        datapoint = self.context.datapoint
+        T0 = time.perf_counter()
+        rejection_generation_outputs: list[ParsedOutputGeneration] = self.rejection_sampling.generate()
+        T1 = time.perf_counter()
+        rejection_confidences = []
+        rejection_confidence_times = []
+        if self.generation_config.batching_enabled:
+            batch_results = self.confidence_engine.compute_confidence_batch(
+                rejection_generation_outputs,
+                shared_cache=self.context.reference_vanilla_question_cache,
+            )
+            for confidence, confidence_time in batch_results:
+                rejection_confidences.append(confidence)
+                rejection_confidence_times.append(confidence_time)
+        else:
+            for output in rejection_generation_outputs:
+                confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+                rejection_confidences.append(confidence)
+                rejection_confidence_times.append(confidence_time)
+        T2 = time.perf_counter()
+
+        # save rejection trajectories
+        for i, rejection_generation_output in enumerate(rejection_generation_outputs):
+            record = TrajectoryRecord(
+                    id=datapoint.id,
+                    question=datapoint.question,
+                    ground_truth=datapoint.ground_truth,
+                    prompt=rejection_generation_output.text_question,
+                    generated_text=rejection_generation_output.text_cot_with_answer,
+                    cot_steps=rejection_generation_output.cot_steps,
+                    final_answer=rejection_generation_output.final_answer,
+                    evaluation_result=None,
+                    confidences=rejection_confidences[i],
+                    timings=Timings(
+                        generation_time=T1-T0,
+                        confidence_time=rejection_confidence_times[i],
+                        total_confidence_time=T2-T1,
+                    ),
+                    input_messages=rejection_generation_output.input_messages,
+                    cost=self.model_adapter.cost(),
+                )
+        
+            self.dataset.evaluate(record)
+            
+            self.rejection_trajectory_repository.save(
+                trajectory_record=record,
+                sample=i,
+            )
+
+
+    def _run_generation_and_confidence_lawyer(self):
+        """
+        - generate lawyer samples & confidences;
+        - outputs to the lawyer dir (one file per sample)
+        """
+        # generate lawyer samples & confidences
+        datapoint = self.context.datapoint
+        T0 = time.perf_counter()
+        lawyer_generation_outputs: list[ParsedOutputGeneration] = self.lawyer_sampling.generate()
+        T1 = time.perf_counter()
+        lawyer_confidences = []
+        lawyer_confidence_times = []
+        if self.generation_config.batching_enabled:
+            batch_results = self.confidence_engine.compute_confidence_batch(
+                lawyer_generation_outputs,
+                shared_cache=self.context.reference_vanilla_question_cache,
+            )
+            for confidence, confidence_time in batch_results:
+                lawyer_confidences.append(confidence)
+                lawyer_confidence_times.append(confidence_time)
+        else:
+            for output in lawyer_generation_outputs:
+                confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+                lawyer_confidences.append(confidence)
+                lawyer_confidence_times.append(confidence_time)
+        T2 = time.perf_counter()
+
+        # save lawyer trajectories
+        for i, lawyer_generation_output in enumerate(lawyer_generation_outputs):
+            record = TrajectoryRecord(
+                    id=datapoint.id,
+                    question=datapoint.question,
+                    ground_truth=datapoint.ground_truth,
+                    prompt=lawyer_generation_output.text_question,
+                    generated_text=lawyer_generation_output.text_cot_with_answer,
+                    cot_steps=lawyer_generation_output.cot_steps,
+                    final_answer=lawyer_generation_output.final_answer,
+                    evaluation_result=None,
+                    confidences=lawyer_confidences[i],
+                    timings=Timings(
+                        generation_time=T1-T0,
+                        confidence_time=lawyer_confidence_times[i],
+                        total_confidence_time=T2-T1,
+                    ),
+                    input_messages=lawyer_generation_output.input_messages,
+                    cost=self.model_adapter.cost(),
+            )
+            
+            self.dataset.evaluate(record)
+            
+            self.lawyer_trajectory_repository.save(
+                trajectory_record=record,
+                sample=i,
+            )
+
+
+    def _run_generation_and_confidence_stepbootstrap(self):
+        """
+        - generate stepbootstrap samples & confidences;
+        - outputs to the stepbootstrap dir (one file per sample)
+        """
+        # generate stepbootstrap samples & confidences
+        datapoint = self.context.datapoint
+        T0 = time.perf_counter()
+        if self.generation_config.model in ("gpt", "qwen_ascend") and self.generation_config.api_concurrency > 1:
+            stepbootstrap_generation_outputs = asyncio.run(
+                self.stepbootstrap_sampling.generate_async(
+                    concurrency=self.generation_config.api_concurrency,
+                )
+            )
+        else:
+            stepbootstrap_generation_outputs = self.stepbootstrap_sampling.generate()
+        T1 = time.perf_counter()
+        stepbootstrap_confidences = []
+        stepbootstrap_confidence_times = []
+        if self.generation_config.model in ("gpt", "qwen_ascend") and self.generation_config.api_concurrency > 1:
+            batch_results = asyncio.run(
+                self.confidence_engine.compute_confidence_batch_async(
+                    stepbootstrap_generation_outputs,
+                    concurrency=self.generation_config.api_concurrency,
+                )
+            )
+            for confidence, confidence_time in batch_results:
+                stepbootstrap_confidences.append(confidence)
+                stepbootstrap_confidence_times.append(confidence_time)
+        elif self.generation_config.batching_enabled:
+            batch_results = self.confidence_engine.compute_confidence_batch(
+                stepbootstrap_generation_outputs,
+                shared_cache=self.context.reference_vanilla_question_cache,
+            )
+            for confidence, confidence_time in batch_results:
+                stepbootstrap_confidences.append(confidence)
+                stepbootstrap_confidence_times.append(confidence_time)
+        else:
+            for output in stepbootstrap_generation_outputs:
+                confidence, confidence_time = self.confidence_engine.compute_confidence(output)
+                stepbootstrap_confidences.append(confidence)
+                stepbootstrap_confidence_times.append(confidence_time)
+        T2 = time.perf_counter()
+
+        # save stepbootstrap trajectories
+        for i, stepbootstrap_generation_output in enumerate(stepbootstrap_generation_outputs):
+            record = TrajectoryRecord(
+                    id=datapoint.id,
+                    question=datapoint.question,
+                    ground_truth=datapoint.ground_truth,
+                    prompt=stepbootstrap_generation_output.text_question,
+                    generated_text=stepbootstrap_generation_output.text_cot_with_answer,
+                    cot_steps=stepbootstrap_generation_output.cot_steps,
+                    final_answer=stepbootstrap_generation_output.final_answer,
+                    evaluation_result=None,
+                    confidences=stepbootstrap_confidences[i],
+                    timings=Timings(
+                        generation_time=T1-T0,
+                        confidence_time=stepbootstrap_confidence_times[i],
+                        total_confidence_time=T2-T1,
+                    ),
+                    input_messages=stepbootstrap_generation_output.input_messages,
+                    cost=self.model_adapter.cost(),
+                )
+
+            self.dataset.evaluate(record)
+
+            self.stepbootstrap_trajectory_repository.save(
+                trajectory_record=record,
+                sample=i,
+            )
+
+
+    def run_generation_and_confidence(self, datapoint: Datapoint):
+        self.context.datapoint = datapoint
+
+        # 1. vanilla
+        self._run_generation_and_confidence_vanilla()
+
+        # 2. rejection
+        self._run_generation_and_confidence_rejection()
+
+        # 3 - generate lawyer samples & confidences
+        self._run_generation_and_confidence_lawyer()
+
+        # 4 - generate stepbootstrap samples & confidences
+        self._run_generation_and_confidence_stepbootstrap()
+
+
+        # clear the all datapoint-related fields in the context to avoid accidentally using them for the next datapoint
+        self.context.clear()
+
+    @staticmethod
+    def _is_retryable_api_error(error: BaseException) -> bool:
+        """Return whether ``error`` matches a known transient API failure."""
+        if isinstance(error, (APITimeoutError, APIConnectionError)):
+            return True
+        if not isinstance(error, InternalServerError):
+            return False
+
+        status_code = getattr(error, "status_code", None)
+        if status_code in (502, 503):
+            return True
+
+        # Some OpenAI-compatible servers return an HTML/string error without a
+        # usable status_code on the exception. Retain narrow fallbacks for the
+        # two transient responses observed in trajectory error files.
+        message = str(error).lower()
+        return "502 bad gateway" in message or "system_memory_overloaded" in message
+
+    def _run_datapoint_with_retries(self, datapoint: Datapoint) -> None:
+        max_retries = self.generation_config.api_datapoint_retries
+        initial_delay = self.generation_config.api_retry_initial_delay
+
+        for attempt in range(max_retries + 1):
+            try:
+                self.run_generation_and_confidence(datapoint)
+                return
+            except Exception as error:
+                self.context.clear()
+                retryable = self._is_retryable_api_error(error)
+                retries_remaining = max_retries - attempt
+
+                if retryable and retries_remaining > 0:
+                    delay = initial_delay * (2 ** attempt)
+                    logger.warning(
+                        "datapoint %s failed with %s; retrying in %.1fs "
+                        "(%d retries remaining)",
+                        datapoint.id,
+                        type(error).__name__,
+                        delay,
+                        retries_remaining,
+                    )
+                    if delay > 0:
+                        time.sleep(delay)
+                    continue
+
+                logger.exception(
+                    "datapoint %s failed%s",
+                    datapoint.id,
+                    " after retries" if retryable else " with a non-retryable error",
+                )
+                self.vanilla_trajectory_repository.save_error(datapoint.id, error)
+                return
+
+
+    def run(self):
+        if self.generation_config.from_pickle is not None:
+            datapoints: list[Datapoint] = self.dataset.load_datapoints_from_pickle(self.generation_config.from_pickle)
+        else:
+            datapoints: list[Datapoint] = self.dataset.load_datapoints()
+
+        # sample_indices, sample_range, and sample_size are mutually exclusive (priority in that order).
+        if self.generation_config.sample_indices is not None:
+            indices = self.generation_config.sample_indices
+            datapoints = [datapoints[i] for i in indices if i < len(datapoints)]
+            samples = "sfull"
+        elif self.generation_config.sample_range is not None:
+            start, end = self.generation_config.sample_range
+            start = max(0, start)
+            end = min(len(datapoints), end)
+            datapoints = datapoints[start:end]
+            samples = f"{start}_{end}"
+        elif self.generation_config.sample_size is not None:
+            datapoints = datapoints[:self.generation_config.sample_size]
+            samples = self.generation_config.sample_size
+        else:
+            samples = "full"
+
+        self._init_repositories(samples)
+
+        progress = tqdm_discord if self.discord else tqdm
+        tag = self.generation_config.tag
+        desc = f"Generating [{tag}]" if tag else "Generating"
+        for datapoint in progress(datapoints, desc=desc, unit="sample", total=len(datapoints)):
+            self._run_datapoint_with_retries(datapoint)
+        
+        
+
+        

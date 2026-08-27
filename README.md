@@ -106,6 +106,7 @@ This directory contains all the necessary scripts for the paper "Statistical Tes
 
 5. All the datasets in pickle form are in external storage paths referenced by the run scripts
     - they are loaded with `--from_pickle`; conversion scripts are in [`datasets/to_pickle/`](datasets/to_pickle/)
+    - the pickles are in `../data_cot/pickles` (in `../data_cot`, the `pickles_prev` directory contains the previous pickle files for NeuRIPs - shouldn't contain too many changes except the expansion of cs1qa; and the other directories contain cached data for certain datasets used by dataset loading in `datasets` - this is where we get the dataset if we do NOT have pickle files)
   
 6. Evaluation (per-dataset / category) are in [`evaluation/`](evaluation/)
 

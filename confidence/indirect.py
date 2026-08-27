@@ -9,7 +9,10 @@ class IndirectConfidenceMethod(ConfidenceMethod):
         super().__init__(model_scorer)
 
     def tail_prompt(self, final_answer: str | int) -> str:
-        return f"\nThe answer is \\boxed{{{final_answer}}}.\nTrue/False:"
+        # return f"\nThe answer is \\boxed{{{final_answer}}}.\nTrue/False:"
+        return f"\nThe answer is \\boxed{{{final_answer}}}.\nBased on the above reasoning, the answer is (True/False):"
+        return f"\nThe answer is \\boxed{{{final_answer}}}.\nPlease resond with 'True' or 'False' in <correctness> tags. Is the previous answer correct? \n<correctness>"
+
 
 
     def extract(self, scorer_output: ScorerOutput) -> dict[str, float]:

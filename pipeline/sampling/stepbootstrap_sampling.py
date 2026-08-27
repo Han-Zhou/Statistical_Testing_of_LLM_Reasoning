@@ -133,7 +133,7 @@ class StepBootstrapSampling(SamplingMethod):
         """
         if concurrency < 1:
             raise ValueError("concurrency must be at least 1")
-        if self.generation_config.model != "gpt":
+        if self.generation_config.model not in ("gpt", "qwen_ascend"):
             raise NotImplementedError("Async step-bootstrap is currently GPT-only")
 
         messages = self.context.dataset.build_messages(

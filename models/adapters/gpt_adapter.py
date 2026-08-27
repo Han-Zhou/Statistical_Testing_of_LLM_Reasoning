@@ -34,6 +34,14 @@ class GptScorer(ModelScorer):
         forward_indirect runs a forward pass on the prompt with indirect suffix, and returns the logits for the indirect tokens. These are 'True' and 'False' tokens generated last
         For GPT, whole_cache is not used.
         """
+
+        # swap out system prompt
+        old = """During your reasoning, do NOT reveal, hint at, or restate the final answer. Do not write lines like 'Answer:', 'Final answer:', any answer strings, or any concluding sentence. Stop immediately after your last numbered reasoning step."""
+
+        prompt[0]['content'] = prompt[0]['content'].replace(old, "")
+        prompt[0]['content'] += "You are also asked to evaluate your answer with True/False after. ONLY respond with a single 'True' or 'False'."
+
+
         llm_outputs: LLMOutput = self.model.forward(prompt)
         completion: ChatCompletion = llm_outputs.outputs
         first_token = completion.choices[0].logprobs.content[0]
@@ -145,8 +153,9 @@ class GptAdapter(ModelAdapter):
         else:
             by_blank = [s.strip() for s in re.split(r"\n{2,}", text_cot) if s.strip()]
             if len(by_blank) > 1:
-                return by_blank
-            cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
+                cot_steps = by_blank
+            else:
+                cot_steps = [s.strip() for s in text_cot.splitlines() if s.strip()]
 
         return cot_steps, text_question, text_cot, text_cot_with_answer
 

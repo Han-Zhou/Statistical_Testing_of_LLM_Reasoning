@@ -253,7 +253,7 @@ class Runner:
         # generate stepbootstrap samples & confidences
         datapoint = self.context.datapoint
         T0 = time.perf_counter()
-        if self.generation_config.model == "gpt" and self.generation_config.api_concurrency > 1:
+        if self.generation_config.model in ("gpt", "qwen_ascend") and self.generation_config.api_concurrency > 1:
             stepbootstrap_generation_outputs = asyncio.run(
                 self.stepbootstrap_sampling.generate_async(
                     concurrency=self.generation_config.api_concurrency,
@@ -264,7 +264,7 @@ class Runner:
         T1 = time.perf_counter()
         stepbootstrap_confidences = []
         stepbootstrap_confidence_times = []
-        if self.generation_config.model == "gpt" and self.generation_config.api_concurrency > 1:
+        if self.generation_config.model in ("gpt", "qwen_ascend") and self.generation_config.api_concurrency > 1:
             batch_results = asyncio.run(
                 self.confidence_engine.compute_confidence_batch_async(
                     stepbootstrap_generation_outputs,

@@ -33,18 +33,28 @@ class API_LLM():
         temperature: float = 0.0,
         stop: Optional[list[str]] = None,
         continue_final_message: bool = False,
+        reasoning_effort: Optional[str] = None,
+        extra_body: Optional[dict] = None
     ) -> LLMOutput:
         logger.info(f"Generating text with model {self.model_name}")
         kwargs = {}
         if stop:
             kwargs["stop"] = stop
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
+
+        if extra_body is not None:
+            kwargs["extra_body"] = dict(extra_body)
+
         if continue_final_message:
             # phase-2 of 2-phase generation: continue the assistant turn that ends
             # in '...\boxed{' instead of opening a new one, so the box is completed
             # in place. vLLM-style extension; stock OpenAI ignores it.
             kwargs["extra_body"] = {
+                **kwargs.get("extra_body", {}),
                 "continue_final_message": True,
                 "add_generation_prompt": False,
+
             }
         response = self.client.chat.completions.create(
             model=self.model_name,
@@ -85,16 +95,29 @@ class API_LLM():
             kwargs["extra_body"] = {
                 "continue_final_message": True,
                 "add_generation_prompt": False,
+                # Disable thinking for reasoning models (e.g. Qwen Ascend): the
+                # confidence methods need the model to emit the answer token
+                # (True/False, etc.) directly, not re-reason. Stock OpenAI ignores
+                # this flag.
+                "chat_template_kwargs": {"enable_thinking": False},
             }
+
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=prompt_messages,
-            max_tokens=20,   # not sure of how many answer tokens we need to generate
+            max_tokens=200,   # not sure of how many answer tokens we need to generate
             temperature=0.0,
             logprobs=True,
             top_logprobs=20,
             **kwargs,
         )
+
+        me = response.choices[0].message
+        res = getattr(me, "reasoning_content", None) or ""
+        nr = getattr(me, "content", None) or ""
+
+        # breakpoint()
+
         self._accumulate_cost(response)
         return LLMOutput(
             outputs=response,
@@ -115,6 +138,7 @@ class API_LLM():
             kwargs["extra_body"] = {
                 "continue_final_message": True,
                 "add_generation_prompt": False,
+                "chat_template_kwargs": {"enable_thinking": False},
             }
         response = await self.async_client.chat.completions.create(
             model=self.model_name,

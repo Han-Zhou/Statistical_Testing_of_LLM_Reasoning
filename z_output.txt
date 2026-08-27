@@ -1,90 +1,0 @@
-W0821 15:21:17.902000 1161924 site-packages/torch/distributed/run.py:851] 
-W0821 15:21:17.902000 1161924 site-packages/torch/distributed/run.py:851] *****************************************
-W0821 15:21:17.902000 1161924 site-packages/torch/distributed/run.py:851] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
-W0821 15:21:17.902000 1161924 site-packages/torch/distributed/run.py:851] *****************************************
-torch_version=2.11.0+cu128
-transformers_version=5.10.2
-world_size=2
-cuda_device_count=2
-rank_0_initial_free_gib=15.116
-rank_0_total_gib=15.460
-expected_custom_tp_parameter_gib=13.7
-estimated_post_load_headroom_gib=1.416
-checkpoint_model_type=qwen3_5
-checkpoint_transformers_version=5.8.0.dev0
-fp8_config_patch={'original': 882, 'remaining': 562, 'removed_mlp_gate': 65, 'removed_non_text': 255, 'rewritten_text_prefix': 560}
-custom_tp_plan_entries=14
-custom_tp_plan_styles={'embedding_rowwise': 1, 'colwise': 5, 'rowwise': 2, 'colwise_gather_output': 5, 'rowwise_split_input': 1}
-Loading weights:   0%|          | 0/1251 [00:00<?, ?it/s]Loading weights:   0%|          | 0/1251 [00:00<?, ?it/s]Loading weights:   0%|          | 2/1251 [00:00<01:41, 12.35it/s]Loading weights:   0%|          | 2/1251 [00:00<01:49, 11.37it/s]Loading weights:   7%|▋         | 87/1251 [00:00<00:02, 403.23it/s]Loading weights:   7%|▋         | 92/1251 [00:00<00:02, 386.54it/s]Loading weights:  14%|█▎        | 170/1251 [00:00<00:01, 569.77it/s]Loading weights:  14%|█▎        | 172/1251 [00:00<00:02, 525.86it/s]Loading weights:  20%|█▉        | 250/1251 [00:00<00:01, 616.54it/s]Loading weights:  22%|██▏       | 270/1251 [00:00<00:01, 653.49it/s]Loading weights:  28%|██▊       | 348/1251 [00:00<00:01, 704.12it/s]Loading weights:  29%|██▉       | 368/1251 [00:00<00:01, 696.24it/s]Loading weights:  35%|███▌      | 441/1251 [00:00<00:01, 773.92it/s]Loading weights:  36%|███▋      | 454/1251 [00:00<00:01, 730.03it/s]Loading weights:  42%|████▏     | 522/1251 [00:00<00:00, 780.55it/s]Loading weights:  45%|████▍     | 560/1251 [00:00<00:00, 800.26it/s]Loading weights:  48%|████▊     | 602/1251 [00:00<00:00, 739.88it/s]Loading weights:  51%|█████▏    | 642/1251 [00:00<00:00, 790.15it/s]Loading weights:  56%|█████▌    | 701/1251 [00:01<00:00, 807.59it/s]Loading weights:  59%|█████▉    | 738/1251 [00:01<00:00, 806.22it/s]Loading weights:  63%|██████▎   | 791/1251 [00:01<00:00, 831.31it/s]Loading weights:  67%|██████▋   | 834/1251 [00:01<00:00, 821.16it/s]Loading weights:  70%|███████   | 876/1251 [00:01<00:00, 788.07it/s]Loading weights:  73%|███████▎  | 917/1251 [00:01<00:00, 797.16it/s]Loading weights:  78%|███████▊  | 972/1251 [00:01<00:00, 810.93it/s]Loading weights:  80%|███████▉  | 1000/1251 [00:01<00:00, 801.10it/s]Loading weights:  85%|████████▌ | 1068/1251 [00:01<00:00, 826.47it/s]Loading weights:  88%|████████▊ | 1106/1251 [00:01<00:00, 859.45it/s]Loading weights:  92%|█████████▏| 1152/1251 [00:01<00:00, 804.50it/s]Loading weights:  95%|█████████▌| 1193/1251 [00:01<00:00, 838.95it/s]Loading weights: 100%|██████████| 1251/1251 [00:01<00:00, 742.58it/s]
-Loading weights:  99%|█████████▊| 1234/1251 [00:01<00:00, 805.41it/s]Loading weights: 100%|██████████| 1251/1251 [00:01<00:00, 745.60it/s]
-unexpected_keys_count=0 sample=[]
-missing_keys_count=0 sample=[]
-mismatched_keys_count=0 sample=[]
-loaded_model_class=Qwen3_5ForCausalLM
-loaded_model_type=qwen3_5_text
-tp_size=2
-tp_plan_entries=14
-loaded_text_only_model=True
-hf_device_map=None
-parameter_layout={('cuda:0', 'torch.bfloat16'): 851, ('cuda:0', 'torch.float8_e4m3fn'): 400}
-dtensor_parameter_count=0
-meta_parameter_count=0
-local_parameter_gib=13.725
-input_embedding_device=cuda:0
-input_embedding_dtype=torch.bfloat16
-input_embedding_local_shape=(124160, 5120)
-input_device=cuda:0
-=== Rendered Prompt ===
-<|im_start|>system
-Reasoning effort is set to xhigh. Please think carefully through the task, validate key assumptions, consider plausible alternatives, and prioritize correctness, consistency, and clarity in the final answer.
-
-You are an expert reasoning assistant. For every problem you receive, think carefully and reason step-by-step. Label each reasoning step as 'Step 1:', 'Step 2:', etc. Keep your reasoning concise, and be brief in each step.
-
-When you output the final answer, output ONLY the single letter corresponding to the correct answer. Do not include periods, explanations, or any other text.<|im_end|>
-<|im_start|>user
-Find a movie similar to Batman, The Mask, The Fugitive, Pretty Woman:
-Options:
-(A) The Front Page
-(B) Maelstrom
-(C) The Lion King
-(D) Lamerica
-
-Think carefully about the movies listed and the options provided. Reason step-by-step before choosing the best answer.
-
-Let's think step-by-step.<|im_end|>
-<|im_start|>assistant
-<think>
-
-=== End Rendered Prompt ===
-prompt_token_count=209
-prompt_round_trip_match=True
-prompt_suffix_matches_thinking_template=True
-eos_token='<|im_end|>' eos_token_id=248046
-pad_token='<|endoftext|>' pad_token_id=248044
-think_open_ids=[248068]
-think_close_ids=[248069]
-bang_ids=[0]
-=== Starting Phase-1 Generation ===
-[transformers] DeepGEMM unavailable for this call, falling back to Triton. Reason: DeepGEMM requires Hopper (SM90) or Blackwell (SM100); current device is SM120.
-[transformers] DeepGEMM unavailable for this call, falling back to Triton. Reason: DeepGEMM requires Hopper (SM90) or Blackwell (SM100); current device is SM120.
-Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 7131.82it/s]
-Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 12516.16it/s]
-generation_seconds=10.868
-generated_token_count=1
-stop_string_found=False
-=== Generated Phase-1 Continuation ===
-We
-=== End Generated Phase-1 Continuation ===
-generated_token_ids=[1596]
-generated_tokens=['We']
-repeated_token_runs=[]
-score_step_count=1
-first_nonfinite_score_step=None
-raw_logit_step_count=1
-first_nonfinite_raw_logit_step=None
-=== Initial Logit Diagnostics ===
-step=1 selected=id=1596 token='We' decoded='We' finite=True min=-9.125 max=27 top=["id=1596 token='We' decoded='We' value=27", "id=760 token='The' decoded='The' value=20.25", "id=22916 token='Need' decoded='Need' value=19.875", "id=40 token='I' decoded='I' value=19.625", "id=9764 token='Let' decoded='Let' value=18.875", "id=868 token='we' decoded='we' value=18.375", "id=31248 token='Okay' decoded='Okay' value=17.625", "id=1206 token='To' decoded='To' value=17.5", "id=5170 token='First' decoded='First' value=17.375", "id=8046 token='Step' decoded='Step' value=16.5"]
-total_seconds=27.812
-tensor_parallel_fp8_test=PASS
-/home/han/miniconda3/envs/cot_vllm/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
-  return func(*args, **kwargs)
